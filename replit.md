@@ -142,7 +142,8 @@ June 26, 2025:
 - ✓ Embedded snapped route data directly in HTML (105 road-following points)
 - ✓ Simplified to GPS-only updates every 60 seconds (no continuous movement)
 - ✓ Eliminated complex route-following animation causing movement issues
-- ✓ Added GPS coordinate snapping to keep bus always on roads
-- ✓ Raw GPS coordinates automatically snap to nearest route point
-- ✓ Bus tracker now works reliably with road-snapped GPS updates
+- ✓ Added GPS coordinate snapping using OpenRouteService API to snap to real roads
+- ✓ Raw GPS coordinates snap to nearest actual road within 500m radius
+- ✓ Fallback to original GPS if road snapping fails or distance too far
+- ✓ Bus tracker now works reliably with authentic road-snapped GPS updates
 - ✓ Complete stable bus tracker ready for deployment
