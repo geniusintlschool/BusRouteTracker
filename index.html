@@ -224,7 +224,10 @@
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
-                    this.showError('Failed to load bus data. Please check your internet connection and try again.');
+                    // Only show error if we actually failed to load critical data
+                    if (!bus4Locations || bus4Locations.length === 0) {
+                        this.showError('Failed to load bus location data. Please check your internet connection and try again.');
+                    }
                     this.showLoading(false);
                 }
             }
