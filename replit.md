@@ -142,8 +142,8 @@ June 26, 2025:
 - ✓ Embedded snapped route data directly in HTML (105 road-following points)
 - ✓ Simplified to GPS-only updates every 60 seconds (no continuous movement)
 - ✓ Eliminated complex route-following animation causing movement issues
-- ✓ Implemented smart route snapping with 300m tolerance
-- ✓ GPS coordinates snap to embedded route when within reasonable distance
+- ✓ Implemented precise route snapping with 5m tolerance  
+- ✓ GPS coordinates snap to embedded route only when very close
 - ✓ Fallback to original GPS when bus is far from expected route
 - ✓ Bus stays on roads while maintaining authentic location accuracy
 - ✓ Complete stable bus tracker ready for deployment

@@ -516,8 +516,8 @@
                     
                     const distanceInMeters = closestDistance * 1000;
                     
-                    // If GPS is within reasonable distance of route (300m), snap to route
-                    if (distanceInMeters <= 300) {
+                    // If GPS is within 5 meters of route, snap to route
+                    if (distanceInMeters <= 5) {
                         newLocation = this.embeddedSnappedRoute[closestIndex];
                         console.log(`GPS [${lat.toFixed(6)}, ${lng.toFixed(6)}] snapped to route point ${closestIndex}: [${newLocation[0].toFixed(6)}, ${newLocation[1].toFixed(6)}] (${distanceInMeters.toFixed(0)}m)`);
                     } else {
