@@ -118,4 +118,8 @@ June 26, 2025:
 - ✓ Fixed loading overlay issues by disabling problematic route snapping
 - ✓ App loads reliably with GPS trail route visualization
 - ✓ Bus location moves automatically every 15 seconds with live coordinates
+- ✓ Implemented continuous movement based on actual speed from BusLocations
+- ✓ Bus pauses for 10 seconds when speed = 0, moves at recorded speed otherwise
+- ✓ Created Google Apps Script for server-side route snapping optimization
+- ✓ Client now fetches pre-computed snapped routes from SnappedRoutes sheet
 - ✓ Complete working bus tracker ready for production deployment
