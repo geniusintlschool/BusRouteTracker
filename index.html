@@ -512,10 +512,21 @@
                     document.body.appendChild(this.busInfoLabel);
                 }
 
+                // Get next stop with number
+                let nextStopText = '';
+                if (ignition === 'ON') {
+                    const etas = this.calculateETA();
+                    if (etas.length > 0) {
+                        const nextStop = etas[0];
+                        nextStopText = `<div>Next: Stop ${nextStop.order}: ${nextStop.stop['Stop Name']} (${nextStop.eta} mins)</div>`;
+                    }
+                }
+
                 this.busInfoLabel.innerHTML = `
                     <div><strong>Bus No ${this.BUS_NUMBER}</strong></div>
                     <div>${statusText}</div>
                     <div>Ignition: ${ignition}</div>
+                    ${nextStopText}
                 `;
 
                 // Position label next to bus
@@ -955,7 +966,7 @@
                     const etas = this.calculateETA();
                     if (etas.length > 0) {
                         const nextStop = etas[0];
-                        labelText += `, ${nextStop.eta} mins to ${nextStop.stop['Stop Name']}`;
+                        labelText += `, ${nextStop.eta} mins to Stop ${nextStop.order}: ${nextStop.stop['Stop Name']}`;
                     } else {
                         labelText += ', Calculating ETA...';
                     }
