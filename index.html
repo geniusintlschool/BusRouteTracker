@@ -298,6 +298,13 @@
                     return dayRecords.slice(0, 50); // Limit to 50 points for performance
                 }
                 
+                // Sort by time to ensure proper route order
+                filteredRecords.sort((a, b) => {
+                    const timeA = new Date(a['Time']);
+                    const timeB = new Date(b['Time']);
+                    return timeA - timeB;
+                });
+                
                 return filteredRecords;
             }
 
@@ -413,6 +420,24 @@
                         opacity: 0.7,
                         dashArray: '5, 10'
                     }).addTo(this.map);
+                    
+                    console.log(`Displaying fallback route with ${fallbackCoords.length} points`);
+                    
+                    // Add popup to fallback route
+                    this.routeLayer.bindPopup(`
+                        <div class="custom-popup">
+                            <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
+                            <p><strong>Date:</strong> June 25, 2025</p>
+                            <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
+                            <p><strong>Data Points:</strong> ${historicalData.length}</p>
+                            <p><em>Route snapping unavailable - showing GPS trail</em></p>
+                        </div>
+                    `);
+                    
+                    // Fit map to show the route
+                    if (fallbackCoords.length > 0) {
+                        this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
+                    }
                 }
             }
 
@@ -449,11 +474,17 @@
             // Convert degrees/minutes/seconds to decimal degrees
             convertDMSToDecimal(dmsString) {
                 try {
-                    // Handle format like "11°38'04.3"N" or "76°05'24.8"E"
-                    const cleanString = dmsString.replace(/[^\d°'".NSEW-]/g, '');
-                    const parts = cleanString.match(/(\d+)°(\d+)'([\d.]+)"([NSEW])/);
+                    // Handle format like "11°38'04.3"N " or "76°05'24.8"E"
+                    // Remove all quotes, extra spaces, and clean the string
+                    const cleanString = dmsString.replace(/"/g, '').trim().replace(/\s+/g, '');
                     
-                    if (!parts) return NaN;
+                    // Match pattern: degrees°minutes'seconds"direction or degrees°minutes'secondsdirection
+                    const parts = cleanString.match(/(\d+)°(\d+)'([\d.]+)([NSEW])/);
+                    
+                    if (!parts) {
+                        console.warn('Could not parse DMS string:', dmsString, 'cleaned to:', cleanString);
+                        return NaN;
+                    }
                     
                     const degrees = parseInt(parts[1]);
                     const minutes = parseInt(parts[2]);
