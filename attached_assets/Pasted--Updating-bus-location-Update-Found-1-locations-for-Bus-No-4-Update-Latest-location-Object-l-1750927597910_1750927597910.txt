@@ -1,0 +1,34 @@
+
+Updating bus location...
+Update: Found 1 locations for Bus No 4
+Update: Latest location: 
+Object {lat: "11.707338", lng: "76.178905", time: "6/26/2025 14:15:32", speed: "0", ignition: "ON"}
+Bus ignition status: "ON" (type: string)
+Update: Display location completed
+Error in updateLastUpdateTime: document.getElementById(...) is null
+Update: ETA alerts checked
+Update: Location updated successfully
+Timer triggered: calling updateBusLocation()
+Updating bus location...
+Update: Found 1 locations for Bus No 4
+Update: Latest location: 
+Object {lat: "11.707338", lng: "76.178905", time: "6/26/2025 14:15:32", speed: "0", ignition: "ON"}
+Bus ignition status: "ON" (type: string)
+Update: Display location completed
+Error in updateLastUpdateTime: document.getElementById(...) is null
+t@https://b8d4eb10-e400-4862-bb32-383fa8a6663f-00-32x0h1l7m528f.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630
+value@https://b8d4eb10-e400-4862-bb32-383fa8a6663f-00-32x0h1l7m528f.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766
+8988/value/this.asyncTimer<@https://b8d4eb10-e400-4862-bb32-383fa8a6663f-00-32x0h1l7m528f.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Update: ETA alerts checked
+Update: Location updated successfully
+Timer triggered: calling updateBusLocation()
+Updating bus location...
+Update: Found 1 locations for Bus No 4
+Update: Latest location: 
+Object {lat: "11.707338", lng: "76.178905", time: "6/26/2025 14:15:32", speed: "0", ignition: "ON"}
+Bus ignition status: "ON" (type: string)
+Update: Display location completed
+Error in updateLastUpdateTime: document.getElementById(...) is null
+t@https://b8d4eb10-e400-4862-bb32-383fa8a6663f-00-32x0h1l7m528f.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630
+value@https://b8d4eb10-e400-4862-bb32-383fa8a6663f-00-32x0h1l7m528f.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766
+8988/value/this.asyncTimer<@https://b8d4eb10-e400-4862-bb32-383fa8a6663
