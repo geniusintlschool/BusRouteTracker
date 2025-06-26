@@ -135,4 +135,8 @@ June 26, 2025:
 - ✓ Implemented route-following animation system using snapped route points
 - ✓ Enhanced movement to follow actual roads at recorded speeds with GPS adjustments
 - ✓ Fixed ETA calculations using realistic 25 km/h speed instead of 5 km/h minimum
+- ✓ Fixed ETA stop sequence logic to show correct upcoming stops in route order
+- ✓ Improved movement smoothness with 100ms update intervals
+- ✓ System now uses real speed from BusLocations data during GPS updates
+- ✓ Bus movement automatically adjusts to actual recorded speeds when ignition is ON
 - ✓ Complete working bus tracker with realistic movement and accurate ETAs ready for deployment

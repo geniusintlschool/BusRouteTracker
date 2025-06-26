@@ -591,9 +591,10 @@
                             
                             // Start continuous movement simulation only if ignition is ON
                             if (this.busIgnition === "ON") {
-                                const simulationSpeed = speed > 0 ? speed : 20; // Default to 20 km/h when ignition ON
+                                // Use real speed from GPS data, fall back to 20 km/h only if speed is 0
+                                const simulationSpeed = speed > 0 ? speed : 20;
+                                console.log(`GPS movement complete - starting continuous simulation at ${simulationSpeed} km/h (real speed: ${speed} km/h, ignition ON)`);
                                 setTimeout(() => {
-                                    console.log(`Starting route-following movement at ${simulationSpeed} km/h (ignition ON)`);
                                     this.startContinuousMovement(simulationSpeed);
                                 }, 500); // Small delay before continuous movement
                             } else {
@@ -604,8 +605,9 @@
                 } else {
                     // No GPS movement - check ignition before starting simulation
                     if (this.busIgnition === "ON") {
-                        const simulationSpeed = speed > 0 ? speed : 20; // Default to 20 km/h when ignition ON
-                        console.log(`No GPS movement - starting route-following simulation at ${simulationSpeed} km/h (ignition ON)`);
+                        // Use actual speed from BusLocations, fall back to 20 km/h only if speed is 0
+                        const simulationSpeed = speed > 0 ? speed : 20;
+                        console.log(`No GPS movement - starting simulation at ${simulationSpeed} km/h (real speed: ${speed} km/h, ignition ON)`);
                         this.lastBusLocation = toLocation;
                         
                         // Start continuous movement simulation immediately
@@ -787,17 +789,8 @@
                 console.log(`Force starting route-following movement at ${speed} km/h`);
                 
                 if (!this.snappedRoute || this.snappedRoute.length === 0) {
-                    console.log('Snapped route not available yet, waiting for it to load...');
-                    // Wait a bit for snapped route to load, then try again
-                    setTimeout(() => {
-                        if (this.snappedRoute && this.snappedRoute.length > 0) {
-                            console.log('Snapped route now available, starting movement');
-                            this.forceStartMovement(speed);
-                        } else {
-                            console.log('Starting basic movement as fallback');
-                            this.startBasicRouteMovement(speed);
-                        }
-                    }, 2000);
+                    console.log('Snapped route not available, starting basic movement immediately');
+                    this.startBasicRouteMovement(speed);
                     return;
                 }
                 
