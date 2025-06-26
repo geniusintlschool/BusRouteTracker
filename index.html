@@ -825,7 +825,7 @@
                 this.currentRouteIndex = closestIndex;
                 console.log(`Starting from route point ${closestIndex}/${this.snappedRoute.length}`);
                 
-                const updateInterval = 500; // Update every 500ms
+                const updateInterval = 100; // Update every 100ms for smooth movement
                 const metersPerSecond = (speed * 1000) / 3600; // Convert km/h to m/s
                 const metersPerUpdate = metersPerSecond * (updateInterval / 1000);
                 
@@ -881,9 +881,11 @@
                         this.currentLocationMarker.setLatLng([nextPoint[0], nextPoint[1]]);
                         console.log(`Advanced to route point ${this.currentRouteIndex}`);
                     } else {
-                        // Move towards next point
+                        // Smooth interpolation towards next point
                         const bearing = this.calculateBearing([currentBusPos.lat, currentBusPos.lng], [nextPoint[0], nextPoint[1]]);
                         const newPosition = this.movePointByDistance([currentBusPos.lat, currentBusPos.lng], bearing, currentMetersPerUpdate / 1000);
+                        
+                        // Set position directly for now
                         this.currentLocationMarker.setLatLng(newPosition);
                     }
                     
@@ -1490,32 +1492,24 @@
                 
                 console.log(`Current bus position: [${busLocation[0].toFixed(6)}, ${busLocation[1].toFixed(6)}]`);
                 
-                // Filter stops based on realistic travel logic
+                // Simple sequential logic: just find next 5 stops in route order
                 for (let i = 0; i < this.stopMarkers.length && nextStops.length < 5; i++) {
                     const stopData = this.stopMarkers[i];
                     const distanceToStop = this.calculateDistance(busLocation, stopData.coordinates);
                     
-                    // Must have higher order number for upcoming stops
-                    if (stopData.order <= currentOrder) {
-                        console.log(`Skipped past stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - lower order than current position`);
+                    // Skip stops that are too far (not relevant for current position)
+                    if (distanceToStop > 8.0) {
+                        console.log(`Skipped distant stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
                         continue;
                     }
                     
-                    // Skip stops that are too far (return journey)
-                    if (distanceToStop > 6.0) {
-                        console.log(`Skipped distant stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away (too far, return journey)`);
-                        continue;
+                    // Only include stops with higher order numbers (upcoming in sequence)
+                    if (stopData.order > currentOrder) {
+                        nextStops.push(stopData);
+                        console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
+                    } else {
+                        console.log(`Skipped past stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - already passed`);
                     }
-                    
-                    // Only skip very close stops (within 50 meters) that have lower order
-                    if (distanceToStop < 0.05 && stopData.order <= currentOrder) {
-                        console.log(`Skipped very close stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away (too close, likely passed)`);
-                        continue;
-                    }
-                    
-                    // Add all upcoming stops in order
-                    nextStops.push(stopData);
-                    console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
                 }
                 
                 // Sort by order to maintain route sequence
