@@ -181,6 +181,15 @@
                 this.initializeMap();
                 this.loadInitialData();
                 this.startLocationUpdates();
+                
+                // Safety timeout to hide loading if it gets stuck
+                setTimeout(() => {
+                    if (this.isInitialLoad) {
+                        console.warn('Force hiding loading overlay after 30 seconds');
+                        this.showLoading(false);
+                        this.isInitialLoad = false;
+                    }
+                }, 30000);
             }
 
             initializeMap() {
@@ -235,13 +244,14 @@
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
+                    // Always hide loading and enable updates, even on error
+                    this.showLoading(false);
+                    this.isInitialLoad = false;
+                    
                     // Show appropriate error message
-                    if (bus4Locations.length === 0) {
+                    if (!bus4Locations || bus4Locations.length === 0) {
                         this.showError('Failed to load bus location data. Please check your internet connection and try again.');
                     }
-                    this.showLoading(false);
-                    // Always set initial load to false, even on error, so updates can start
-                    this.isInitialLoad = false;
                 }
             }
 
