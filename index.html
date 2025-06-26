@@ -611,11 +611,9 @@
                 // Always animate movement smoothly, even for small movements
                 console.log(`Distance check: ${distance}, threshold: 0.000001, will animate: ${distance > 0.000001}`);
                 
-                // Start continuous movement after GPS update
-                setTimeout(() => {
-                    console.log(`Starting continuous movement at ${speed} km/h`);
-                    this.startSmoothMovement(speed);
-                }, 2000);
+                // Force start continuous movement immediately
+                console.log(`GPS update complete - forcing continuous movement at ${speed} km/h`);
+                this.startContinuousMovement(speed);
                 
                 if (distance > 0.000001) { // Animate even tiny movements
                     console.log(`GPS movement detected: ${(distance * 111000).toFixed(0)}m - starting smooth animation`);
@@ -632,6 +630,10 @@
                     if (this.smoothMovementTimer) {
                         clearInterval(this.smoothMovementTimer);
                         this.smoothMovementTimer = null;
+                    }
+                    if (this.continuousTimer) {
+                        clearInterval(this.continuousTimer);
+                        this.continuousTimer = null;
                     }
                     this.stopContinuousMovement();
                     console.log('New GPS update received - stopping any ongoing movement');
@@ -1172,56 +1174,72 @@
                 return upcomingStops[0];
             }
 
-            // Simple effective continuous movement
-            startSmoothMovement(speed) {
-                console.log(`Starting smooth movement at ${speed} km/h`);
+            // Ultra-smooth continuous movement system
+            startContinuousMovement(speed) {
+                console.log(`🚌 Starting ultra-smooth continuous movement at ${speed} km/h`);
                 
-                // Clear existing intervals
+                // Clear all existing movement timers
+                if (this.continuousTimer) {
+                    clearInterval(this.continuousTimer);
+                }
                 if (this.smoothMovementTimer) {
                     clearInterval(this.smoothMovementTimer);
                 }
                 
                 if (this.busIgnition !== "ON") {
-                    console.log('Ignition OFF - no movement');
+                    console.log('Bus ignition OFF - no continuous movement');
                     return;
                 }
                 
-                const actualSpeed = speed > 0 ? speed : 10; // Default 10 km/h if speed is 0
-                console.log(`Movement starting: ${actualSpeed} km/h, updates every 3 seconds`);
+                const movementSpeed = speed > 0 ? speed : 12; // Default 12 km/h when stopped
+                console.log(`🎯 Continuous movement activated: ${movementSpeed} km/h, 3-second intervals`);
                 
-                // Move every 3 seconds
-                this.smoothMovementTimer = setInterval(() => {
-                    if (!this.currentLocationMarker) return;
+                // Start immediate continuous movement
+                this.continuousTimer = setInterval(() => {
+                    if (!this.currentLocationMarker) {
+                        console.log('❌ No bus marker - stopping movement');
+                        return;
+                    }
                     
                     const currentPos = this.currentLocationMarker.getLatLng();
                     const nextStop = this.getNextBusStop([currentPos.lat, currentPos.lng]);
-                    if (!nextStop) return;
                     
-                    // Calculate movement distance
-                    const metersPerSecond = (actualSpeed * 1000) / 3600;
-                    const moveDistance = (metersPerSecond * 3) / 1000; // 3 seconds in km
-                    
-                    // Get direction to next stop
-                    const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
-                    const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, moveDistance);
-                    
-                    // Update position
-                    this.currentLocationMarker.setLatLng(newPos);
-                    this.updateBusInfoLabel(newPos, actualSpeed, this.busIgnition);
-                    
-                    const distanceToStop = this.calculateDistance(newPos, nextStop.coordinates) * 1000;
-                    console.log(`Bus moved ${(moveDistance * 1000).toFixed(0)}m at ${actualSpeed}km/h, ${distanceToStop.toFixed(0)}m to ${nextStop.stop['Stop Name']}`);
-                    
-                    // Pause at stops
-                    if (distanceToStop < 100) {
-                        console.log(`Near ${nextStop.stop['Stop Name']} - pausing`);
-                        clearInterval(this.smoothMovementTimer);
-                        setTimeout(() => {
-                            this.startSmoothMovement(actualSpeed);
-                        }, 5000);
+                    if (!nextStop) {
+                        console.log('❌ No next stop found - stopping movement');
+                        return;
                     }
                     
-                }, 3000);
+                    // Calculate small movement increment (3 seconds worth)
+                    const metersPerSecond = (movementSpeed * 1000) / 3600;
+                    const moveDistanceMeters = metersPerSecond * 3; // 3 seconds of movement
+                    const moveDistanceKm = moveDistanceMeters / 1000;
+                    
+                    // Calculate bearing to next stop
+                    const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
+                    const newPosition = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, moveDistanceKm);
+                    
+                    // Apply smooth position update
+                    this.currentLocationMarker.setLatLng(newPosition);
+                    this.updateBusInfoLabel(newPosition, movementSpeed, this.busIgnition);
+                    
+                    // Calculate distance to next stop
+                    const distanceToStop = this.calculateDistance(newPosition, nextStop.coordinates) * 1000;
+                    
+                    console.log(`🚌 Moved ${moveDistanceMeters.toFixed(1)}m at ${movementSpeed}km/h → ${distanceToStop.toFixed(0)}m to ${nextStop.stop['Stop Name']}`);
+                    
+                    // Pause briefly when approaching stops
+                    if (distanceToStop < 100) {
+                        console.log(`🛑 Approaching ${nextStop.stop['Stop Name']} - pausing movement`);
+                        clearInterval(this.continuousTimer);
+                        setTimeout(() => {
+                            console.log(`🚌 Resuming movement from ${nextStop.stop['Stop Name']}`);
+                            this.startContinuousMovement(movementSpeed);
+                        }, 6000);
+                    }
+                    
+                }, 3000); // Move every 3 seconds
+                
+                console.log(`✅ Continuous movement timer started - bus will move every 3 seconds`);
             }
 
             calculateMovementDirection() {
