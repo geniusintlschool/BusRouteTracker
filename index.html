@@ -877,7 +877,7 @@
                     if (snappedRoute && snappedRoute.length > 0) {
                         console.log(`Got snapped route with ${snappedRoute.length} points`);
                         
-                        // Create route polyline using snapped coordinates with arrows
+                        // Create route polyline using snapped coordinates
                         this.routeLayer = L.polyline(snappedRoute, {
                             color: '#ff9800',
                             weight: 4,
@@ -1072,39 +1072,7 @@
                 });
             }
 
-            addDirectionArrows(routeCoordinates) {
-                // Add arrow markers at regular intervals along the route
-                const arrowInterval = Math.floor(routeCoordinates.length / 15); // About 15 arrows
-                
-                for (let i = arrowInterval; i < routeCoordinates.length - arrowInterval; i += arrowInterval) {
-                    const current = routeCoordinates[i];
-                    const next = routeCoordinates[i + 1];
-                    
-                    if (current && next) {
-                        // Calculate bearing for arrow direction
-                        const bearing = this.calculateBearing(current, next);
-                        
-                        const arrowIcon = L.divIcon({
-                            className: 'arrow-icon',
-                            html: `
-                                <div style="
-                                    width: 0;
-                                    height: 0;
-                                    border-left: 8px solid transparent;
-                                    border-right: 8px solid transparent;
-                                    border-bottom: 12px solid #ff9800;
-                                    transform: rotate(${bearing}deg);
-                                    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
-                                "></div>
-                            `,
-                            iconSize: [16, 16],
-                            iconAnchor: [8, 8]
-                        });
-                        
-                        L.marker(current, { icon: arrowIcon }).addTo(this.map);
-                    }
-                }
-            }
+            // Direction arrows removed - confusing on bidirectional roads
 
             calculateBearing(from, to) {
                 const lat1 = from[0] * Math.PI / 180;
@@ -1188,30 +1156,27 @@
                 // Start from the closest stop and look for upcoming stops
                 console.log(`Closest stop: ${this.stopMarkers[currentStopIndex]?.stop['Stop Name']} at ${minDistance.toFixed(3)} km`);
                 
-                // Find the stops that are actually ahead in the route sequence
-                // Look at all stops and find those with higher order numbers that are reasonable distance away
+                // Find the next stops strictly following the order sequence
+                // Start from the stop after the closest one in the sequence
+                const currentOrder = this.stopMarkers[currentStopIndex]?.order || 0;
                 
+                console.log(`Current position closest to order ${currentOrder}, looking for next stops in sequence`);
+                
+                // Get all stops with higher order numbers (upcoming in sequence)
                 for (let i = 0; i < this.stopMarkers.length && nextStops.length < 5; i++) {
                     const stopData = this.stopMarkers[i];
-                    const distance = this.calculateDistance(busLocation, stopData.coordinates);
                     
-                    // Include stops that are:
-                    // 1. More than 100m away (to avoid showing stops we just passed)
-                    // 2. Have a higher order number than the closest stop (ahead in sequence)
-                    // 3. Or are more than 500m away from bus (far enough to be considered upcoming)
-                    
-                    const isAheadInSequence = stopData.order > (this.stopMarkers[currentStopIndex]?.order || 0);
-                    const isFarEnoughToBeUpcoming = distance > 0.5; // 500 meters
-                    const isNotTooClose = distance > 0.1; // Not within 100 meters
-                    
-                    if (isNotTooClose && (isAheadInSequence || isFarEnoughToBeUpcoming)) {
+                    // Only include stops that have a higher order number (truly upcoming)
+                    if (stopData.order > currentOrder) {
                         nextStops.push(stopData);
-                        console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distance.toFixed(2)}km away`);
+                        console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order})`);
                     }
                 }
                 
-                // Sort by order to maintain sequence
+                // Sort by order to maintain proper sequence
                 nextStops.sort((a, b) => a.order - b.order);
+                
+                console.log(`Final upcoming stops in order: ${nextStops.map(s => `${s.order}:${s.stop['Stop Name']}`).join(', ')}`);
                 
                 // If we ran out of stops in the sequence, we might be near the end of route
                 if (nextStops.length === 0 && currentStopIndex >= this.stopMarkers.length - 1) {
