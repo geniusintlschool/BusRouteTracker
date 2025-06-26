@@ -605,11 +605,11 @@
                     // Stop any existing continuous movement
                     this.stopContinuousMovement();
                     
-                    // Smooth animation parameters - scale time based on distance
-                    const minTime = 1000; // Minimum 1 second
-                    const maxTime = 4000; // Maximum 4 seconds
-                    const transitionTime = Math.min(maxTime, Math.max(minTime, distance * 50000)); // Scale with distance
-                    const steps = Math.min(120, Math.max(30, distance * 100000)); // Scale steps with distance
+                    // Enhanced smooth animation parameters
+                    const minTime = 2000; // Minimum 2 seconds for smoother movement
+                    const maxTime = 6000; // Maximum 6 seconds for longer distances
+                    const transitionTime = Math.min(maxTime, Math.max(minTime, distance * 60000)); // Scale with distance
+                    const steps = Math.min(180, Math.max(60, distance * 150000)); // More steps for smoother animation
                     const stepTime = transitionTime / steps;
                     let currentStep = 0;
                     
@@ -618,7 +618,7 @@
                     const smoothTransition = setInterval(() => {
                         currentStep++;
                         const progress = currentStep / steps;
-                        const easedProgress = this.easeInOutQuad(progress);
+                        const easedProgress = this.easeInOutCubic(progress);
                         
                         const currentLat = fromLocation[0] + (latDiff * easedProgress);
                         const currentLng = fromLocation[1] + (lngDiff * easedProgress);
@@ -1019,6 +1019,11 @@
             
             easeInOutQuad(t) {
                 return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            }
+
+            // Enhanced easing function for smoother movement
+            easeInOutCubic(t) {
+                return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
             }
 
             calculateMovementDirection() {
