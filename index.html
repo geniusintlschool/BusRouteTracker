@@ -787,8 +787,17 @@
                 console.log(`Force starting route-following movement at ${speed} km/h`);
                 
                 if (!this.snappedRoute || this.snappedRoute.length === 0) {
-                    console.log('Snapped route not available, starting basic movement along route coordinates');
-                    this.startBasicRouteMovement(speed);
+                    console.log('Snapped route not available yet, waiting for it to load...');
+                    // Wait a bit for snapped route to load, then try again
+                    setTimeout(() => {
+                        if (this.snappedRoute && this.snappedRoute.length > 0) {
+                            console.log('Snapped route now available, starting movement');
+                            this.forceStartMovement(speed);
+                        } else {
+                            console.log('Starting basic movement as fallback');
+                            this.startBasicRouteMovement(speed);
+                        }
+                    }, 2000);
                     return;
                 }
                 
@@ -943,8 +952,13 @@
                         
                         // Resume movement after 10 seconds
                         setTimeout(() => {
-                            console.log(`Resuming from Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']} at 10 km/h`);
+                            console.log(`Resuming from Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']} - restarting with snapped route`);
                             this.isAtStop = false;
+                            // Stop current movement and restart with proper snapped route
+                            this.stopContinuousMovement();
+                            setTimeout(() => {
+                                this.forceStartMovement(10);
+                            }, 1000);
                         }, 10000);
                         
                         return;
@@ -1481,9 +1495,9 @@
                     const stopData = this.stopMarkers[i];
                     const distanceToStop = this.calculateDistance(busLocation, stopData.coordinates);
                     
-                    // Skip stops that are clearly already passed or too close
-                    if (distanceToStop < 1.2) { // Less than 1.2km - likely in same area or passed
-                        console.log(`Skipped nearby stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away (too close, likely passed)`);
+                    // Must have higher order number for upcoming stops
+                    if (stopData.order <= currentOrder) {
+                        console.log(`Skipped past stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - lower order than current position`);
                         continue;
                     }
                     
@@ -1493,13 +1507,13 @@
                         continue;
                     }
                     
-                    // Must have higher order number for upcoming stops
-                    if (stopData.order <= currentOrder) {
-                        console.log(`Skipped past stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - lower order than current position`);
+                    // Only skip very close stops (within 50 meters) that have lower order
+                    if (distanceToStop < 0.05 && stopData.order <= currentOrder) {
+                        console.log(`Skipped very close stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away (too close, likely passed)`);
                         continue;
                     }
                     
-                    // Add genuinely upcoming stops
+                    // Add all upcoming stops in order
                     nextStops.push(stopData);
                     console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
                 }
