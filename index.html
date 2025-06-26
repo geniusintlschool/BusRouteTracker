@@ -174,6 +174,8 @@
                 this.currentDirection = null;
                 this.isMoving = false;
                 this.stopTimer = null;
+                this.isAtStop = false;
+                this.currentStopName = null;
                 
                 // API Configuration
                 this.ORS_API_KEY = '5b3ce3597851110001cf62486ef5d938c6804787a401d0a56b3236ae';
@@ -488,8 +490,9 @@
 
             }
 
-            updateBusInfoLabelWithSpeed(location, speed, ignition) {
-                const statusText = speed > 0 ? `Moving at ${speed} km/h` : 
+            updateBusInfoLabelWithSpeed(location, speed, ignition, customStatus = null) {
+                const statusText = customStatus ? customStatus :
+                                  speed > 0 ? `Moving at ${speed} km/h` : 
                                   ignition === 'ON' ? 'Stopped (10s pause)' : 'Parked';
                 
                 if (!this.busInfoLabel) {
@@ -582,6 +585,10 @@
                     this.lastSpeed = speed;
                 }
                 
+                // Initialize stop tracking variables
+                this.isAtStop = false;
+                this.currentStopName = null;
+                
                 if (speed === 0) {
                     // Bus is stopped - pause for 10 seconds
                     this.isMoving = false;
@@ -637,9 +644,36 @@
                     const newLat = currentPos.lat + (this.currentDirection.lat * moveDistance);
                     const newLng = currentPos.lng + (this.currentDirection.lng * moveDistance);
                     
-                    this.currentLocationMarker.setLatLng([newLat, newLng]);
-                    // Update info label without recalculating ETA during simulation
-                    this.updateBusInfoLabelWithSpeed([newLat, newLng], speed, this.busIgnition);
+                    // Check if bus is near any bus stop (within 50 meters)
+                    const newPosition = [newLat, newLng];
+                    const nearbyStop = this.checkNearbyBusStop(newPosition);
+                    
+                    if (nearbyStop && !this.isAtStop) {
+                        // Bus reached a stop - pause for 10 seconds
+                        console.log(`Bus reached ${nearbyStop.stop['Stop Name']} - pausing for 10 seconds`);
+                        this.isAtStop = true;
+                        this.currentStopName = nearbyStop.stop['Stop Name'];
+                        
+                        // Update position to exact stop location
+                        this.currentLocationMarker.setLatLng(nearbyStop.coordinates);
+                        this.updateBusInfoLabelWithSpeed(nearbyStop.coordinates, 0, this.busIgnition, `At ${nearbyStop.stop['Stop Name']}`);
+                        
+                        // Resume movement after 10 seconds
+                        setTimeout(() => {
+                            console.log(`Resuming movement from ${this.currentStopName}`);
+                            this.isAtStop = false;
+                            this.currentStopName = null;
+                        }, 10000);
+                        
+                        return;
+                    }
+                    
+                    // Normal movement if not at stop
+                    if (!this.isAtStop) {
+                        this.currentLocationMarker.setLatLng([newLat, newLng]);
+                        // Update info label without recalculating ETA during simulation
+                        this.updateBusInfoLabelWithSpeed([newLat, newLng], speed, this.busIgnition);
+                    }
                     
                 }, updateInterval);
             }
@@ -700,6 +734,26 @@
                 
                 // Fallback: use general eastward direction
                 return { lat: 0, lng: 0.0001 };
+            }
+
+            checkNearbyBusStop(position) {
+                if (!this.stopMarkers || this.stopMarkers.length === 0) {
+                    return null;
+                }
+                
+                const busLatLng = L.latLng(position[0], position[1]);
+                const stopRadius = 50; // 50 meters detection radius
+                
+                for (let stopData of this.stopMarkers) {
+                    const stopLatLng = L.latLng(stopData.coordinates[0], stopData.coordinates[1]);
+                    const distance = busLatLng.distanceTo(stopLatLng); // Distance in meters
+                    
+                    if (distance <= stopRadius) {
+                        return stopData;
+                    }
+                }
+                
+                return null;
             }
 
             animateBusMovement(fromLatLng, toLatLng, speed) {
@@ -1078,14 +1132,13 @@
                 
                 const busLocation = this.lastBusLocation;
                 const speed = Math.max(this.lastSpeed, 5); // Minimum 5 km/h for calculation
+                
+                // Find next stops based on route direction, not sheet order
+                const nextStops = this.findNextStopsOnRoute(busLocation);
                 const etas = [];
                 
-                // Get next 5 stops
-                const sortedStops = this.stopMarkers
-                    .sort((a, b) => a.order - b.order)
-                    .slice(0, 5);
-                
-                sortedStops.forEach(stopData => {
+                // Calculate ETA for next 5 stops along the route
+                nextStops.slice(0, 5).forEach(stopData => {
                     const distance = this.calculateDistance(busLocation, stopData.coordinates);
                     const timeInHours = distance / speed;
                     const timeInMinutes = Math.round(timeInHours * 60);
@@ -1099,6 +1152,64 @@
                 });
                 
                 return etas;
+            }
+
+            findNextStopsOnRoute(busLocation) {
+                if (!this.routeLayer || !this.routeLayer.getLatLngs || this.stopMarkers.length === 0) {
+                    // Fallback to distance-based sorting if route not available
+                    return this.stopMarkers
+                        .map(stop => ({
+                            ...stop,
+                            distanceFromBus: this.calculateDistance(busLocation, stop.coordinates)
+                        }))
+                        .sort((a, b) => a.distanceFromBus - b.distanceFromBus);
+                }
+                
+                const routePoints = this.routeLayer.getLatLngs();
+                const busLatLng = L.latLng(busLocation[0], busLocation[1]);
+                
+                // Find bus position on route
+                let closestRouteIndex = 0;
+                let minDistanceToRoute = Infinity;
+                
+                routePoints.forEach((point, index) => {
+                    const distance = busLatLng.distanceTo(point);
+                    if (distance < minDistanceToRoute) {
+                        minDistanceToRoute = distance;
+                        closestRouteIndex = index;
+                    }
+                });
+                
+                // Find stops ahead on the route
+                const nextStops = [];
+                
+                this.stopMarkers.forEach(stopData => {
+                    const stopLatLng = L.latLng(stopData.coordinates[0], stopData.coordinates[1]);
+                    
+                    // Find closest route point to this stop
+                    let closestStopRouteIndex = 0;
+                    let minDistanceToStopRoute = Infinity;
+                    
+                    routePoints.forEach((point, index) => {
+                        const distance = stopLatLng.distanceTo(point);
+                        if (distance < minDistanceToStopRoute) {
+                            minDistanceToStopRoute = distance;
+                            closestStopRouteIndex = index;
+                        }
+                    });
+                    
+                    // If stop is ahead of bus on route, include it
+                    if (closestStopRouteIndex > closestRouteIndex) {
+                        nextStops.push({
+                            ...stopData,
+                            routeIndex: closestStopRouteIndex,
+                            distanceFromBus: this.calculateDistance(busLocation, stopData.coordinates)
+                        });
+                    }
+                });
+                
+                // Sort by route order (position along route)
+                return nextStops.sort((a, b) => a.routeIndex - b.routeIndex);
             }
 
             checkETAAlerts() {
