@@ -497,9 +497,9 @@
                     iconAnchor: [17, 17]
                 });
 
-                // Use original GPS coordinates without snapping for now
+                // Use raw GPS coordinates from BusLocations sheet
                 const newLocation = [lat, lng];
-                console.log(`Using original GPS coordinates: [${lat.toFixed(6)}, ${lng.toFixed(6)}]`);
+                console.log(`Bus location: [${lat.toFixed(6)}, ${lng.toFixed(6)}]`);
 
                 if (this.currentLocationMarker) {
                     // Smooth transition to new location
