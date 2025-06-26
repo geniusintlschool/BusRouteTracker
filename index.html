@@ -1162,35 +1162,31 @@
                 
                 console.log(`Current position closest to order ${currentOrder}, looking for next stops in sequence`);
                 
-                // For U-turn routes, track actual progress along the route
-                // Find stops that are truly ahead based on route progression
-                
-                // Get the current stop index to understand route progression
-                let progressMarker = currentOrder;
-                
-                // For U-turn routes, we need to be smarter about which stops are truly upcoming
-                // If a stop is far away but has a higher order number, it might be on the return journey
+                // For U-turn routes, implement smarter logic based on actual route progression
+                // Consider both distance and direction to determine truly upcoming stops
                 
                 for (let i = 0; i < this.stopMarkers.length && nextStops.length < 5; i++) {
                     const stopData = this.stopMarkers[i];
                     const distanceToStop = this.calculateDistance(busLocation, stopData.coordinates);
                     
                     // Enhanced logic for U-turn routes:
-                    // 1. Must have higher order number
-                    // 2. If distance is > 3km, it's likely on return journey - skip it
-                    // 3. Must be reasonable distance for next immediate stops
+                    // 1. Must have higher order number than current position
+                    // 2. For close stops (<1km), they're likely already passed - skip them
+                    // 3. For medium distance stops (1-3km), they could be next upcoming stops
+                    // 4. For distant stops (>3km), they're likely on return journey - skip them
                     
                     const isAheadInOrder = stopData.order > currentOrder;
-                    const isReasonableForNext = distanceToStop < 3.0; // Within 3km for immediate upcoming stops
-                    const isNotTooClose = distanceToStop > 0.15; // More than 150m away
+                    const isVeryClose = distanceToStop < 1.0; // Less than 1km - likely already passed
+                    const isReasonableNext = distanceToStop >= 1.0 && distanceToStop <= 3.0; // 1-3km range
+                    const isTooDistant = distanceToStop > 3.0; // More than 3km - return journey
                     
-                    if (isAheadInOrder && isReasonableForNext && isNotTooClose) {
+                    if (isAheadInOrder && isReasonableNext) {
                         nextStops.push(stopData);
                         console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
-                    } else if (isAheadInOrder && distanceToStop >= 3.0) {
+                    } else if (isAheadInOrder && isVeryClose) {
+                        console.log(`Skipped close stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, likely already passed`);
+                    } else if (isAheadInOrder && isTooDistant) {
                         console.log(`Skipped distant stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, likely return journey`);
-                    } else if (isAheadInOrder && distanceToStop <= 0.15) {
-                        console.log(`Skipped close stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, already passed`);
                     }
                 }
                 
@@ -1298,43 +1294,84 @@
             }
 
             showAlert(message) {
-                // Create alert notification
+                // Create alert notification with improved styling
                 const alertDiv = document.createElement('div');
                 alertDiv.className = 'eta-alert';
                 alertDiv.style.cssText = `
                     position: fixed;
-                    top: 20px;
+                    top: 80px;
                     right: 20px;
-                    background-color: #4caf50;
+                    background: linear-gradient(135deg, #4caf50, #45a049);
                     color: white;
-                    padding: 15px 20px;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
                     z-index: 10000;
-                    font-size: 14px;
-                    max-width: 300px;
-                    animation: slideIn 0.3s ease-out;
+                    font-size: 15px;
+                    font-weight: 500;
+                    max-width: 320px;
+                    min-width: 250px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    backdrop-filter: blur(10px);
+                    animation: slideInBounce 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                    line-height: 1.4;
                 `;
-                alertDiv.textContent = message;
                 
-                // Add animation
+                // Add icon and better formatting
+                const icon = '🚌';
+                alertDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">${icon}</span>
+                        <div>${message}</div>
+                    </div>
+                `;
+                
+                // Enhanced animation styles
                 const style = document.createElement('style');
                 style.textContent = `
-                    @keyframes slideIn {
-                        from { transform: translateX(100%); opacity: 0; }
-                        to { transform: translateX(0); opacity: 1; }
+                    @keyframes slideInBounce {
+                        0% { 
+                            transform: translateX(100%) scale(0.8); 
+                            opacity: 0; 
+                        }
+                        50% { 
+                            transform: translateX(-10px) scale(1.05); 
+                            opacity: 0.8; 
+                        }
+                        100% { 
+                            transform: translateX(0) scale(1); 
+                            opacity: 1; 
+                        }
+                    }
+                    @keyframes fadeOut {
+                        from { 
+                            transform: translateX(0) scale(1); 
+                            opacity: 1; 
+                        }
+                        to { 
+                            transform: translateX(100%) scale(0.8); 
+                            opacity: 0; 
+                        }
                     }
                 `;
-                document.head.appendChild(style);
+                if (!document.querySelector('#alert-animations')) {
+                    style.id = 'alert-animations';
+                    document.head.appendChild(style);
+                }
                 
                 document.body.appendChild(alertDiv);
                 
-                // Remove alert after 5 seconds
+                // Enhanced removal with fade out animation
                 setTimeout(() => {
                     if (alertDiv.parentNode) {
-                        alertDiv.remove();
+                        alertDiv.style.animation = 'fadeOut 0.3s ease-in forwards';
+                        setTimeout(() => {
+                            if (alertDiv.parentNode) {
+                                alertDiv.remove();
+                            }
+                        }, 300);
                     }
-                }, 5000);
+                }, 4000);
                 
                 console.log(`ETA Alert: ${message}`);
             }
