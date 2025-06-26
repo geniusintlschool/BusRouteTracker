@@ -248,10 +248,15 @@
                     this.isInitialLoad = false;
                     console.log('Initial load completed successfully, updates enabled');
                 
-                // Start bus movement simulation immediately
+                // Start bus movement simulation immediately (only if ignition ON)
                 setTimeout(() => {
-                    console.log('Starting bus movement simulation...');
-                    this.updateBusLocation();
+                    console.log('Checking if bus movement simulation should start...');
+                    if (this.currentLocationMarker && this.busIgnition === "ON") {
+                        console.log('Starting route-following movement directly at 20 km/h (ignition ON)');
+                        this.startContinuousMovement(20);
+                    } else if (this.busIgnition === "OFF") {
+                        console.log('Bus ignition is OFF - no movement simulation will start');
+                    }
                 }, 2000);
                     
                 } catch (error) {
@@ -571,31 +576,42 @@
                             console.log('GPS animation complete');
                             this.lastBusLocation = toLocation;
                             
-                            // Start continuous movement simulation (use recorded speed or 25 km/h for demo)
-                            const simulationSpeed = speed > 0 ? speed : 25; // Default to 25 km/h for demonstration
-                            setTimeout(() => {
-                                console.log(`Starting route-following movement at ${simulationSpeed} km/h`);
-                                this.startContinuousMovement(simulationSpeed);
-                            }, 500); // Small delay before continuous movement
+                            // Start continuous movement simulation only if ignition is ON
+                            if (this.busIgnition === "ON") {
+                                const simulationSpeed = speed > 0 ? speed : 20; // Default to 20 km/h when ignition ON
+                                setTimeout(() => {
+                                    console.log(`Starting route-following movement at ${simulationSpeed} km/h (ignition ON)`);
+                                    this.startContinuousMovement(simulationSpeed);
+                                }, 500); // Small delay before continuous movement
+                            } else {
+                                console.log('Bus ignition is OFF - no movement simulation');
+                            }
                         }
                     }, stepTime);
                 } else {
-                    // No GPS movement - start route-following simulation
-                    const simulationSpeed = speed > 0 ? speed : 25; // Default to 25 km/h for demonstration
-                    console.log(`No GPS movement - starting route-following simulation at ${simulationSpeed} km/h`);
-                    this.lastBusLocation = toLocation;
-                    
-                    // Start continuous movement simulation immediately
-                    this.startContinuousMovement(simulationSpeed);
+                    // No GPS movement - check ignition before starting simulation
+                    if (this.busIgnition === "ON") {
+                        const simulationSpeed = speed > 0 ? speed : 20; // Default to 20 km/h when ignition ON
+                        console.log(`No GPS movement - starting route-following simulation at ${simulationSpeed} km/h (ignition ON)`);
+                        this.lastBusLocation = toLocation;
+                        
+                        // Start continuous movement simulation immediately
+                        this.startContinuousMovement(simulationSpeed);
+                    } else {
+                        console.log('Bus ignition is OFF - no movement simulation');
+                        this.lastBusLocation = toLocation;
+                    }
                 }
             }
             
             startContinuousMovement(speed) {
+                console.log(`startContinuousMovement called with speed: ${speed}`);
                 // Clear any existing movement
                 this.stopContinuousMovement();
                 
                 if (!this.snappedRoute || this.snappedRoute.length === 0) {
-                    console.log('No snapped route available for route-following animation');
+                    console.log('No snapped route available for route-following animation - starting basic movement');
+                    this.startBasicMovement(speed);
                     return;
                 }
                 
@@ -615,12 +631,17 @@
                     console.log('Bus stopped - pausing for 10 seconds');
                     
                     this.stopTimer = setTimeout(() => {
-                        console.log('Stop period ended - resuming route-following movement');
+                        console.log('Stop period ended - checking ignition before resuming');
                         this.stopTimer = null;
                         this.isAtStop = false;
                         
-                        // Resume with simulated speed when stopped
-                        this.startRouteFollowingMovement(20); // 20 km/h simulation
+                        // Resume only if ignition is ON
+                        if (this.busIgnition === "ON") {
+                            console.log('Resuming route-following movement at 20 km/h (ignition ON)');
+                            this.startRouteFollowingMovement(20);
+                        } else {
+                            console.log('Bus ignition is OFF - not resuming movement');
+                        }
                     }, 10000);
                     return;
                 }
@@ -629,8 +650,12 @@
             }
             
             startRouteFollowingMovement(speed) {
+                console.log(`startRouteFollowingMovement called with speed: ${speed}`);
+                console.log(`Snapped route available: ${this.snappedRoute ? this.snappedRoute.length : 'null'} points`);
+                
                 if (!this.snappedRoute || this.snappedRoute.length === 0) {
-                    console.log('No snapped route available for movement');
+                    console.log('No snapped route available for movement - forcing basic movement');
+                    this.startBasicMovement(speed);
                     return;
                 }
                 
@@ -713,6 +738,34 @@
                         // Update info label with current speed
                         this.updateBusInfoLabelWithSpeed([currentPosition.lat, currentPosition.lng], speed, this.busIgnition);
                     }
+                    
+                }, updateInterval);
+            }
+
+            startBasicMovement(speed) {
+                console.log(`Starting basic movement at ${speed} km/h`);
+                this.isMoving = true;
+                
+                // Use a simple eastward direction if no route available
+                const direction = { lat: 0.0002, lng: 0.0003 };
+                const metersPerSecond = speed / 3.6;
+                const degreesPerMeter = 1 / 111320;
+                const degreesPerSecond = metersPerSecond * degreesPerMeter;
+                const updateInterval = 100;
+                
+                this.movementInterval = setInterval(() => {
+                    if (!this.currentLocationMarker || !this.isMoving) {
+                        return;
+                    }
+                    
+                    const currentPos = this.currentLocationMarker.getLatLng();
+                    const moveDistance = degreesPerSecond * (updateInterval / 1000);
+                    
+                    const newLat = currentPos.lat + (direction.lat * moveDistance);
+                    const newLng = currentPos.lng + (direction.lng * moveDistance);
+                    
+                    this.currentLocationMarker.setLatLng([newLat, newLng]);
+                    this.updateBusInfoLabelWithSpeed([newLat, newLng], speed, this.busIgnition);
                     
                 }, updateInterval);
             }
