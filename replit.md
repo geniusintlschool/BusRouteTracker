@@ -110,4 +110,7 @@ June 26, 2025:
 - ✓ ETA calculations for next 5 stops with 5-minute alerts
 - ✓ GPS-like initial zoom to current bus location
 - ✓ Enhanced bus icon with pulsing animation
-- ✓ Telegram Mini App optimization
+- ✓ Fixed unhandled promise rejections causing infinite loading on GitHub Pages
+- ✓ Added global error handling for network failures and API timeouts
+- ✓ App successfully loads from GitHub Pages deployment
+- → Ready for Telegram Mini App configuration
