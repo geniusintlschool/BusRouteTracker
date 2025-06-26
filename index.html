@@ -82,6 +82,23 @@
             display: none;
         }
 
+        .bus-info-label {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 1000;
+            white-space: nowrap;
+            pointer-events: none;
+            max-width: 200px;
+            text-align: center;
+        }
+
 
 
         /* Custom popup styles */
@@ -135,6 +152,7 @@
             constructor() {
                 this.map = null;
                 this.currentLocationMarker = null;
+                this.busInfoLabel = null;
                 this.routeLayer = null;
                 this.stopMarkers = [];
                 this.historicalRoute = [];
@@ -165,6 +183,13 @@
                     attribution: '© OpenStreetMap contributors',
                     maxZoom: 19
                 }).addTo(this.map);
+
+                // Update bus info label position when map moves
+                this.map.on('move zoom', () => {
+                    if (this.lastBusLocation && this.busInfoLabel) {
+                        this.updateBusInfoLabel(this.lastBusLocation);
+                    }
+                });
             }
 
             async loadInitialData() {
@@ -378,6 +403,9 @@
                 this.lastBusLocation = newLocation;
                 this.lastSpeed = speed;
 
+                // Update or create bus info label
+                this.updateBusInfoLabel(newLocation);
+
                 // Only zoom on initial load or when requested
                 if (shouldZoom) {
                     this.map.setView(newLocation, 16);
@@ -404,12 +432,61 @@
                     
                     this.currentLocationMarker.setLatLng([currentLat, currentLng]);
                     
+                    // Update bus info label position during animation
+                    if (this.busInfoLabel) {
+                        this.updateBusInfoLabel([currentLat, currentLng]);
+                    }
+                    
                     if (currentStep < steps) {
                         setTimeout(animate, duration / steps);
                     }
                 };
                 
                 animate();
+            }
+
+            updateBusInfoLabel(busLocation) {
+                const etas = this.calculateETA();
+                let labelText = `Bus No ${this.BUS_NUMBER}`;
+                
+                if (etas.length > 0) {
+                    const nextStop = etas[0];
+                    labelText += `, ${nextStop.eta} mins to ${nextStop.stop['Stop Name']}`;
+                } else {
+                    labelText += ', Calculating ETA...';
+                }
+                
+                if (!this.busInfoLabel) {
+                    // Create the label element
+                    this.busInfoLabel = document.createElement('div');
+                    this.busInfoLabel.className = 'bus-info-label';
+                    document.body.appendChild(this.busInfoLabel);
+                }
+                
+                // Update label text
+                this.busInfoLabel.textContent = labelText;
+                
+                // Position the label next to the bus icon
+                const busPixelPosition = this.map.latLngToContainerPoint(busLocation);
+                const labelWidth = this.busInfoLabel.offsetWidth || 150;
+                
+                // Position to the right of the bus icon with some offset
+                this.busInfoLabel.style.left = (busPixelPosition.x + 45) + 'px';
+                this.busInfoLabel.style.top = (busPixelPosition.y - 15) + 'px';
+                
+                // Keep label visible on screen
+                const mapContainer = this.map.getContainer();
+                const mapWidth = mapContainer.offsetWidth;
+                const mapHeight = mapContainer.offsetHeight;
+                
+                // Adjust position if label would go off-screen
+                if (busPixelPosition.x + 45 + labelWidth > mapWidth) {
+                    this.busInfoLabel.style.left = (busPixelPosition.x - labelWidth - 45) + 'px';
+                }
+                
+                if (busPixelPosition.y - 15 < 0) {
+                    this.busInfoLabel.style.top = (busPixelPosition.y + 45) + 'px';
+                }
             }
 
             async displayHistoricalRoute(historicalData) {
