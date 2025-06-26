@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus No 4 Tracker</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #333;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .error-message {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background-color: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 4px;
+            padding: 12px;
+            color: #c62828;
+            font-size: 14px;
+            z-index: 1001;
+            display: none;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: white;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            min-width: 200px;
+            font-size: 14px;
+        }
+
+        .info-panel h3 {
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .info-item {
+            margin-bottom: 4px;
+            color: #666;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .status-live {
+            background-color: #4caf50;
+        }
+
+        .status-historical {
+            background-color: #ff9800;
+        }
+
+        /* Custom popup styles */
+        .custom-popup {
+            font-family: inherit;
+        }
+
+        .custom-popup h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .custom-popup p {
+            margin: 4px 0;
+            color: #666;
+            font-size: 12px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 480px) {
+            .info-panel {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 10px;
+                width: calc(100% - 20px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="map"></div>
+        
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading bus data...</div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="info-panel" id="infoPanel">
+            <h3>Bus No 4 Tracker</h3>
+            <div class="info-item">
+                <span class="status-indicator status-live"></span>
+                Current Location
+            </div>
+            <div class="info-item">
+                <span class="status-indicator status-historical"></span>
+                Historical Route (Jun 25, 3:30-5:30 PM)
+            </div>
+            <div class="info-item" id="lastUpdate">
+                Last Update: Loading...
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        class BusTracker {
+            constructor() {
+                this.map = null;
+                this.currentLocationMarker = null;
+                this.routeLayer = null;
+                this.stopMarkers = [];
+                this.historicalRoute = [];
+                
+                // API Configuration
+                this.ORS_API_KEY = '5b3ce3597851110001cf62486ef5d938c6804787a401d0a56b3236ae';
+                this.SHEETS_BASE_URL = 'https://opensheet.elk.sh/1Jnsrz4MoEgjQJ2UjcPB20e4sxd_3TMWAMQ_lq9HAUOs';
+                
+                // Bus configuration
+                this.BUS_NUMBER = 4;
+                
+                this.initializeMap();
+                this.loadBusData();
+            }
+
+            initializeMap() {
+                // Initialize map centered on a default location (will be adjusted when data loads)
+                this.map = L.map('map').setView([28.6139, 77.2090], 13);
+
+                // Add OpenRouteService tile layer
+                L.tileLayer('https://maps.openrouteservice.org/routing/{z}/{x}/{y}.png', {
+                    attribution: '© OpenRouteService, © OpenStreetMap contributors',
+                    maxZoom: 18
+                }).addTo(this.map);
+            }
+
+            async loadBusData() {
+                try {
+                    this.showLoading(true);
+                    
+                    // Fetch data from all three endpoints
+                    const [busLocations, busHistory, busStops] = await Promise.all([
+                        this.fetchData(`${this.SHEETS_BASE_URL}/BusLocations`),
+                        this.fetchData(`${this.SHEETS_BASE_URL}/BusHistory`),
+                        this.fetchData(`${this.SHEETS_BASE_URL}/BusStops`)
+                    ]);
+
+                    // Filter data for Bus No 4
+                    const bus4Locations = busLocations.filter(bus => parseInt(bus['Bus Number']) === this.BUS_NUMBER);
+                    const bus4History = this.filterHistoricalData(busHistory);
+                    const bus4Stops = busStops.filter(stop => parseInt(stop['Bus Number']) === this.BUS_NUMBER);
+
+                    // Process and display data
+                    await this.displayCurrentLocation(bus4Locations);
+                    await this.displayHistoricalRoute(bus4History);
+                    this.displayBusStops(bus4Stops);
+                    
+                    this.updateLastUpdateTime();
+                    this.showLoading(false);
+                    
+                } catch (error) {
+                    console.error('Error loading bus data:', error);
+                    this.showError('Failed to load bus data. Please check your internet connection and try again.');
+                    this.showLoading(false);
+                }
+            }
+
+            async fetchData(url) {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            }
+
+            filterHistoricalData(busHistory) {
+                const targetDate = '2024-06-25'; // June 25, 2024
+                const startTime = '15:30'; // 3:30 PM
+                const endTime = '17:30'; // 5:30 PM
+                
+                return busHistory.filter(record => {
+                    if (parseInt(record['Bus Number']) !== this.BUS_NUMBER) {
+                        return false;
+                    }
+                    
+                    const recordTime = record['Time'];
+                    if (!recordTime) return false;
+                    
+                    // Parse the time string (assuming format includes date and time)
+                    const recordDate = new Date(recordTime);
+                    const recordDateStr = recordDate.toISOString().split('T')[0];
+                    const recordTimeStr = recordDate.toTimeString().substr(0, 5);
+                    
+                    return recordDateStr === targetDate && 
+                           recordTimeStr >= startTime && 
+                           recordTimeStr <= endTime;
+                });
+            }
+
+            async displayCurrentLocation(busLocations) {
+                if (busLocations.length === 0) {
+                    console.warn('No current location data found for Bus No 4');
+                    return;
+                }
+
+                // Get the most recent location
+                const currentLocation = busLocations[busLocations.length - 1];
+                const lat = parseFloat(currentLocation['Latitude']);
+                const lng = parseFloat(currentLocation['Longitude']);
+
+                if (isNaN(lat) || isNaN(lng)) {
+                    console.warn('Invalid coordinates for current location');
+                    return;
+                }
+
+                // Create custom yellow bus icon
+                const busIcon = L.divIcon({
+                    className: 'bus-icon',
+                    html: `
+                        <div style="
+                            background-color: #ffd700;
+                            width: 30px;
+                            height: 30px;
+                            border-radius: 50%;
+                            border: 3px solid #fff;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 16px;
+                        ">🚌</div>
+                    `,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                // Add current location marker
+                this.currentLocationMarker = L.marker([lat, lng], { icon: busIcon })
+                    .addTo(this.map)
+                    .bindPopup(`
+                        <div class="custom-popup">
+                            <h4>Bus No ${this.BUS_NUMBER} - Current Location</h4>
+                            <p><strong>Speed:</strong> ${currentLocation['Speed'] || 'N/A'} km/h</p>
+                            <p><strong>Ignition:</strong> ${currentLocation['Ignition'] || 'N/A'}</p>
+                            <p><strong>Time:</strong> ${currentLocation['Time'] || 'N/A'}</p>
+                            <p><strong>Coordinates:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+                        </div>
+                    `);
+
+                // Center map on current location
+                this.map.setView([lat, lng], 15);
+            }
+
+            async displayHistoricalRoute(historicalData) {
+                if (historicalData.length === 0) {
+                    console.warn('No historical data found for the specified time range');
+                    return;
+                }
+
+                // Extract coordinates from historical data
+                const coordinates = historicalData
+                    .map(record => {
+                        const lat = parseFloat(record['Latitude']);
+                        const lng = parseFloat(record['Longitude']);
+                        return !isNaN(lat) && !isNaN(lng) ? [lng, lat] : null; // ORS expects [lng, lat]
+                    })
+                    .filter(coord => coord !== null);
+
+                if (coordinates.length < 2) {
+                    console.warn('Insufficient coordinate data for route snapping');
+                    return;
+                }
+
+                try {
+                    // Get snapped route from OpenRouteService
+                    const snappedRoute = await this.getSnappedRoute(coordinates);
+                    
+                    if (snappedRoute && snappedRoute.length > 0) {
+                        // Convert back to [lat, lng] for Leaflet
+                        const leafletCoords = snappedRoute.map(coord => [coord[1], coord[0]]);
+                        
+                        // Create route polyline
+                        this.routeLayer = L.polyline(leafletCoords, {
+                            color: '#ff9800',
+                            weight: 4,
+                            opacity: 0.7
+                        }).addTo(this.map);
+
+                        // Add popup to route
+                        this.routeLayer.bindPopup(`
+                            <div class="custom-popup">
+                                <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
+                                <p><strong>Date:</strong> June 25, 2024</p>
+                                <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
+                                <p><strong>Data Points:</strong> ${historicalData.length}</p>
+                            </div>
+                        `);
+
+                        // Fit map to show the route
+                        this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
+                    }
+                } catch (error) {
+                    console.error('Error creating snapped route:', error);
+                    // Fallback: show simple polyline without snapping
+                    const fallbackCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                    this.routeLayer = L.polyline(fallbackCoords, {
+                        color: '#ff9800',
+                        weight: 4,
+                        opacity: 0.7,
+                        dashArray: '5, 10'
+                    }).addTo(this.map);
+                }
+            }
+
+            async getSnappedRoute(coordinates) {
+                try {
+                    const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': this.ORS_API_KEY,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            coordinates: coordinates,
+                            radiuses: coordinates.map(() => 1000), // 1km radius for snapping
+                            continue_straight: false
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`ORS API error: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    return data.features[0]?.geometry?.coordinates || [];
+                } catch (error) {
+                    console.error('Error getting snapped route:', error);
+                    return [];
+                }
+            }
+
+            displayBusStops(busStops) {
+                busStops.forEach((stop, index) => {
+                    const lat = parseFloat(stop['Latitude']);
+                    const lng = parseFloat(stop['Longitude']);
+
+                    if (isNaN(lat) || isNaN(lng)) {
+                        console.warn(`Invalid coordinates for stop: ${stop['Stop Name']}`);
+                        return;
+                    }
+
+                    // Create bus stop icon
+                    const stopIcon = L.divIcon({
+                        className: 'stop-icon',
+                        html: `
+                            <div style="
+                                background-color: #2196f3;
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 50%;
+                                border: 2px solid #fff;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-size: 10px;
+                                font-weight: bold;
+                            ">${stop['Order'] || index + 1}</div>
+                        `,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+
+                    const marker = L.marker([lat, lng], { icon: stopIcon })
+                        .addTo(this.map)
+                        .bindPopup(`
+                            <div class="custom-popup">
+                                <h4>${stop['Stop Name'] || 'Bus Stop'}</h4>
+                                <p><strong>Bus Number:</strong> ${stop['Bus Number']}</p>
+                                <p><strong>Order:</strong> ${stop['Order'] || index + 1}</p>
+                                <p><strong>Coordinates:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+                            </div>
+                        `);
+
+                    this.stopMarkers.push(marker);
+                });
+            }
+
+            updateLastUpdateTime() {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString();
+                document.getElementById('lastUpdate').textContent = `Last Update: ${timeString}`;
+            }
+
+            showLoading(show) {
+                const overlay = document.getElementById('loadingOverlay');
+                overlay.style.display = show ? 'flex' : 'none';
+            }
+
+            showError(message) {
+                const errorElement = document.getElementById('errorMessage');
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+                
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    errorElement.style.display = 'none';
+                }, 10000);
+            }
+
+            // Method to refresh data (can be called externally)
+            async refresh() {
+                await this.loadBusData();
+            }
+        }
+
+        // Initialize the bus tracker when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.busTracker = new BusTracker();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                window.busTracker.refresh();
+            }, 30000);
+        });
+
+        // Telegram Web App specific initialization
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+    </script>
+</body>
+</html>
