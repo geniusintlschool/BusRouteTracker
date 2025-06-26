@@ -520,16 +520,20 @@
                 const lngDiff = toLocation[1] - fromLocation[1];
                 const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
                 
-                if (distance > 0.0001) { // Only animate significant movements
+                if (distance > 0.0001) { // Only animate significant movements (>10 meters)
                     this.currentDirection = {
                         lat: latDiff / distance,
                         lng: lngDiff / distance
                     };
                     
+                    console.log(`Significant movement detected: ${(distance * 111000).toFixed(2)} meters`);
+                    
                     // Smooth transition to new position
                     const steps = Math.max(15, Math.min(30, Math.floor(distance * 50000))); // Scale with distance
                     const stepTime = 2000; // 2 seconds for transition
                     let currentStep = 0;
+                    
+                    console.log(`Starting smooth animation: ${steps} steps over ${stepTime}ms`);
                     
                     const smoothTransition = setInterval(() => {
                         currentStep++;
@@ -553,10 +557,23 @@
                         }
                     }, stepTime / steps);
                 } else {
-                    // Small movement, just update position and start continuous movement
-                    this.currentLocationMarker.setLatLng(toLocation);
-                    this.updateBusInfoLabel(toLocation);
+                    // No significant movement - but if speed > 0, simulate movement
+                    console.log(`Bus stationary GPS but speed: ${speed} km/h - simulating movement`);
+                    
+                    // Show movement logs for debugging
+                    if (speed > 0) {
+                        console.log('Bus has speed but GPS unchanged - will simulate continuous movement');
+                    }
                     this.lastBusLocation = toLocation;
+                    
+                    // For stationary GPS with non-zero speed, create a default movement direction
+                    if (speed > 0 && !this.currentDirection) {
+                        // Use last known direction or create a slight forward movement
+                        this.currentDirection = this.currentDirection || { lat: 0.0001, lng: 0.0001 };
+                        console.log('Using default movement direction for GPS-stationary bus');
+                    }
+                    
+                    // Start continuous movement to simulate movement at recorded speed
                     this.startContinuousMovement(speed);
                 }
             }
@@ -578,19 +595,24 @@
                     return;
                 }
                 
-                // More accurate speed conversion: km/h to degrees per second
-                // 1 degree latitude ≈ 111.32 km, 1 degree longitude ≈ 111.32 km * cos(latitude)
-                const avgLat = this.currentLocationMarker ? this.currentLocationMarker.getLatLng().lat : 11.7;
-                const latDegreesPerKm = 1 / 111.32;
-                const lngDegreesPerKm = 1 / (111.32 * Math.cos(avgLat * Math.PI / 180));
+                // Ensure we have a movement direction for continuous movement
+                if (!this.currentDirection) {
+                    // Calculate direction from route or use last known GPS movement
+                    this.currentDirection = this.calculateMovementDirection() || { lat: 0.0001, lng: 0.0001 };
+                    console.log('Created movement direction for continuous movement');
+                }
                 
-                // Use latitude degrees for speed calculation (more consistent)
-                const degreesPerSecond = (speed / 3.6) * latDegreesPerKm / 3600; // km/h to m/s to deg/s
-                const updateInterval = 200; // Update every 200ms for very smooth movement
+                // More accurate speed conversion
+                const avgLat = this.currentLocationMarker ? this.currentLocationMarker.getLatLng().lat : 11.7;
+                const metersPerSecond = speed / 3.6; // Convert km/h to m/s
+                const degreesPerMeter = 1 / 111320; // More precise: 1 degree ≈ 111,320 meters
+                const degreesPerSecond = metersPerSecond * degreesPerMeter;
+                
+                const updateInterval = 100; // Update every 100ms for smooth movement
                 
                 this.isMoving = true;
                 this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), speed, this.busIgnition);
-                console.log(`Starting continuous movement at ${speed} km/h`);
+                console.log(`Starting continuous movement at ${speed} km/h (${metersPerSecond.toFixed(2)} m/s)`);
                 
                 this.movementInterval = setInterval(() => {
                     if (!this.currentLocationMarker || !this.currentDirection || !this.isMoving) {
@@ -623,11 +645,48 @@
             
             easeInOutQuad(t) {
                 return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            }
 
-                // Only zoom on initial load or when requested
-                if (shouldZoom) {
-                    this.map.setView(newLocation, 16);
+            calculateMovementDirection() {
+                // Try to determine movement direction from route data
+                if (this.routeLayer && this.routeLayer.getLatLngs) {
+                    const routePoints = this.routeLayer.getLatLngs();
+                    if (routePoints.length > 1) {
+                        // Find closest route point and use direction along route
+                        const busPos = this.currentLocationMarker ? this.currentLocationMarker.getLatLng() : null;
+                        if (busPos) {
+                            let closestIndex = 0;
+                            let minDistance = Infinity;
+                            
+                            routePoints.forEach((point, index) => {
+                                const distance = busPos.distanceTo(point);
+                                if (distance < minDistance) {
+                                    minDistance = distance;
+                                    closestIndex = index;
+                                }
+                            });
+                            
+                            // Use direction from current point to next point on route
+                            if (closestIndex < routePoints.length - 1) {
+                                const current = routePoints[closestIndex];
+                                const next = routePoints[closestIndex + 1];
+                                const latDiff = next.lat - current.lat;
+                                const lngDiff = next.lng - current.lng;
+                                const magnitude = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+                                
+                                if (magnitude > 0) {
+                                    return {
+                                        lat: latDiff / magnitude,
+                                        lng: lngDiff / magnitude
+                                    };
+                                }
+                            }
+                        }
+                    }
                 }
+                
+                // Fallback: use general eastward direction
+                return { lat: 0, lng: 0.0001 };
             }
 
             animateBusMovement(fromLatLng, toLatLng, speed) {
