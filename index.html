@@ -228,6 +228,7 @@
                     this.updateLastUpdateTime();
                     this.showLoading(false);
                     this.isInitialLoad = false;
+                    console.log('Initial load completed successfully, updates enabled');
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
@@ -236,6 +237,8 @@
                         this.showError('Failed to load bus location data. Please check your internet connection and try again.');
                     }
                     this.showLoading(false);
+                    // Always set initial load to false, even on error, so updates can start
+                    this.isInitialLoad = false;
                 }
             }
 
@@ -274,6 +277,13 @@
             startLocationUpdates() {
                 // Update bus location every 15 seconds
                 console.log('Starting 15-second location update timer');
+                
+                // Force enable updates after 30 seconds regardless of initial load status
+                setTimeout(() => {
+                    console.log('Force enabling location updates after 30 seconds');
+                    this.isInitialLoad = false;
+                }, 30000);
+                
                 setInterval(() => {
                     if (!this.isInitialLoad) {
                         console.log('Timer triggered: calling updateBusLocation()');
