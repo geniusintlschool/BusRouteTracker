@@ -359,11 +359,11 @@
                         
                         console.log('Update: Location updated successfully');
                 
-                // Start continuous movement with corrected direction
+                // Start immediate visible movement
                 setTimeout(() => {
-                    console.log(`🚌 GUARANTEED MOVEMENT START at ${this.busSpeed} km/h`);
-                    this.startGuaranteedMovement(this.busSpeed);
-                }, 3000);
+                    console.log(`🚌 STARTING VISIBLE MOVEMENT at ${this.busSpeed} km/h`);
+                    this.startVisibleMovement(this.busSpeed || 25);
+                }, 2000);
                     } else {
                         console.warn('Update: No Bus No 4 locations found');
                     }
@@ -660,6 +660,10 @@
                     if (this.guaranteedTimer) {
                         clearInterval(this.guaranteedTimer);
                         this.guaranteedTimer = null;
+                    }
+                    if (this.visibleTimer) {
+                        clearInterval(this.visibleTimer);
+                        this.visibleTimer = null;
                     }
                     this.stopContinuousMovement();
                     console.log('New GPS update received - stopping any ongoing movement');
@@ -1574,8 +1578,8 @@
                 }
                 
                 // Verify next stop has valid coordinates
-                if (!nextStop.coordinates || nextStop.coordinates[0] < 10 || nextStop.coordinates[1] < 70) {
-                    console.log(`❌ Invalid coordinates for ${nextStop.stop['Stop Name']}: [${nextStop.coordinates}]`);
+                if (!nextStop.coordinates || nextStop.coordinates.length < 2 || nextStop.coordinates[0] < 10 || nextStop.coordinates[1] < 70) {
+                    console.log(`❌ Invalid coordinates for ${nextStop.stop ? nextStop.stop['Stop Name'] : 'Unknown'}: [${nextStop.coordinates}]`);
                     return;
                 }
                 
@@ -1672,6 +1676,84 @@
                 const nextPoint = this.embeddedSnappedRoute[bestRouteIndex];
                 console.log(`➡️ Route point ${bestRouteIndex}/${this.embeddedSnappedRoute.length} toward ${nextStop.stop['Stop Name']}: [${nextPoint[0].toFixed(6)}, ${nextPoint[1].toFixed(6)}]`);
                 return nextPoint;
+            }
+
+            // Simple visible movement system
+            startVisibleMovement(speed) {
+                console.log(`🚌 VISIBLE MOVEMENT START at ${speed} km/h`);
+                
+                // Clear existing timers
+                if (this.visibleTimer) {
+                    clearInterval(this.visibleTimer);
+                }
+                
+                if (this.busIgnition !== "ON") {
+                    console.log('Bus ignition OFF - no visible movement');
+                    return;
+                }
+                
+                const movementSpeed = speed > 0 ? speed : 25;
+                console.log(`⚡ VISIBLE: ${movementSpeed} km/h with 4-second intervals`);
+                
+                // Start immediate movement
+                this.performVisibleMovement(movementSpeed);
+                
+                // Set regular interval
+                this.visibleTimer = setInterval(() => {
+                    console.log(`🔄 VISIBLE MOVEMENT CYCLE`);
+                    this.performVisibleMovement(movementSpeed);
+                }, 4000); // Every 4 seconds
+                
+                console.log(`✅ VISIBLE MOVEMENT ACTIVE`);
+            }
+
+            performVisibleMovement(speed) {
+                console.log(`🚀 VISIBLE MOVEMENT at ${speed} km/h`);
+                
+                if (!this.currentLocationMarker) {
+                    console.log('❌ No bus marker');
+                    return;
+                }
+                
+                const currentPos = this.currentLocationMarker.getLatLng();
+                console.log(`📍 FROM: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                
+                // Find next stop in sequence
+                const upcomingStops = this.getUpcomingStops([currentPos.lat, currentPos.lng]);
+                if (!upcomingStops || upcomingStops.length === 0) {
+                    console.log('❌ No upcoming stops');
+                    return;
+                }
+                
+                const nextStop = upcomingStops[0];
+                const targetCoords = [nextStop.lat, nextStop.lng];
+                
+                // Calculate movement distance (4 seconds worth)
+                const metersPerSecond = (speed * 1000) / 3600;
+                const moveMeters = metersPerSecond * 4;
+                const moveKm = moveMeters / 1000;
+                
+                console.log(`🎯 TO: ${nextStop['Stop Name']} at [${targetCoords[0].toFixed(6)}, ${targetCoords[1].toFixed(6)}]`);
+                console.log(`🚀 MOVING: ${moveMeters.toFixed(1)}m`);
+                
+                // Calculate bearing and new position
+                const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], targetCoords);
+                const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, moveKm);
+                
+                // Apply movement
+                this.currentLocationMarker.setLatLng(newPos);
+                this.updateBusInfoLabel(newPos, speed, this.busIgnition);
+                
+                console.log(`🚌 MOVED TO: [${newPos[0].toFixed(6)}, ${newPos[1].toFixed(6)}]`);
+                
+                const remainingDistance = this.calculateDistance(newPos, targetCoords) * 1000;
+                console.log(`📏 DISTANCE: ${remainingDistance.toFixed(0)}m to ${nextStop['Stop Name']}`);
+                
+                // Stop when close to destination
+                if (remainingDistance < 200) {
+                    console.log(`🛑 NEAR ${nextStop['Stop Name']} - stopping visible movement`);
+                    clearInterval(this.visibleTimer);
+                }
             }
 
             calculateMovementDirection() {
