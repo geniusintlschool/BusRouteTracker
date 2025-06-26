@@ -497,7 +497,20 @@
                     iconAnchor: [17, 17]
                 });
 
-                const newLocation = [lat, lng];
+                // Snap GPS coordinates to nearest point on embedded route to keep bus on roads
+                let snappedLocation = [lat, lng];
+                if (this.embeddedSnappedRoute && this.embeddedSnappedRoute.length > 0) {
+                    let closestDistance = Infinity;
+                    for (const routePoint of this.embeddedSnappedRoute) {
+                        const distance = this.calculateDistance([lat, lng], routePoint);
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            snappedLocation = routePoint;
+                        }
+                    }
+                    console.log(`GPS: [${lat.toFixed(6)}, ${lng.toFixed(6)}] snapped to route: [${snappedLocation[0].toFixed(6)}, ${snappedLocation[1].toFixed(6)}] (${(closestDistance * 1000).toFixed(0)}m away)`);
+                }
+                const newLocation = snappedLocation;
 
                 if (this.currentLocationMarker) {
                     // Smooth transition to new location
