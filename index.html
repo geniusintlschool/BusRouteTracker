@@ -205,10 +205,10 @@
                 // Initialize map centered on a default location (will be adjusted when data loads)
                 this.map = L.map('map').setView([28.6139, 77.2090], 13);
 
-                // Add OpenRouteService tile layer
-                L.tileLayer('https://maps.openrouteservice.org/routing/{z}/{x}/{y}.png', {
-                    attribution: '© OpenRouteService, © OpenStreetMap contributors',
-                    maxZoom: 18
+                // Add OpenStreetMap tile layer (more reliable)
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
                 }).addTo(this.map);
             }
 
