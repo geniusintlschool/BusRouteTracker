@@ -336,6 +336,7 @@
 
                 // Store ignition status for ETA calculations
                 this.busIgnition = ignition;
+                console.log(`Bus ignition status: "${ignition}" (type: ${typeof ignition})`);
 
                 // Create custom yellow bus icon with direction
                 const busIcon = L.divIcon({
