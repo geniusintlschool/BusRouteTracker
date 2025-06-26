@@ -523,20 +523,21 @@
                 const lngDiff = toLocation[1] - fromLocation[1];
                 const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
                 
-                if (distance > 0.0001) { // Only animate significant movements (>10 meters)
+                // Always update direction when we have GPS movement
+                if (distance > 0) {
                     this.currentDirection = {
                         lat: latDiff / distance,
                         lng: lngDiff / distance
                     };
-                    
-                    console.log(`Significant movement detected: ${(distance * 111000).toFixed(2)} meters`);
-                    
+                    console.log(`GPS movement: ${(distance * 111000).toFixed(0)}m, direction updated`);
+                }
+                
+                // For smooth movement, always transition even for small movements
+                if (distance > 0.00001) { // Minimum movement threshold (1 meter)
                     // Smooth transition to new position
-                    const steps = Math.max(15, Math.min(30, Math.floor(distance * 50000))); // Scale with distance
-                    const stepTime = 2000; // 2 seconds for transition
+                    const steps = 20;
+                    const stepTime = 1500; // 1.5 seconds for GPS updates
                     let currentStep = 0;
-                    
-                    console.log(`Starting smooth animation: ${steps} steps over ${stepTime}ms`);
                     
                     const smoothTransition = setInterval(() => {
                         currentStep++;
@@ -560,18 +561,17 @@
                         }
                     }, stepTime / steps);
                 } else {
-                    // Same GPS coordinates - simulate movement between GPS updates
-                    console.log(`GPS unchanged but speed: ${speed} km/h - simulating continuous movement`);
+                    // No GPS movement - use existing position and direction
+                    console.log(`No GPS movement - continuing with speed: ${speed} km/h`);
                     this.lastBusLocation = toLocation;
                     
-                    // Always ensure we have a movement direction from the route
+                    // Ensure we have movement direction from route if none exists
                     if (!this.currentDirection) {
                         this.currentDirection = this.calculateMovementDirection();
-                        console.log('Calculated movement direction from route for GPS simulation:', this.currentDirection);
+                        console.log('Using route direction for stationary GPS');
                     }
                     
-                    // Start continuous movement simulation for 60-second intervals
-                    console.log('Starting 60-second continuous movement simulation');
+                    // Start continuous movement simulation
                     this.startContinuousMovement(speed);
                 }
             }
@@ -995,10 +995,17 @@
             displayBusStops(busStops) {
                 console.log(`Processing ${busStops.length} bus stops`);
                 
-                // Sort bus stops by order number
+                // Determine if this is morning or evening run based on current time
+                const currentHour = new Date().getHours();
+                const isEveningRun = currentHour >= 15; // After 3 PM is evening run
+                const orderColumn = isEveningRun ? 'Evening Order' : 'Morning Order';
+                
+                console.log(`Using ${orderColumn} for bus stop ordering (current hour: ${currentHour})`);
+                
+                // Sort bus stops by the appropriate order column
                 const sortedStops = busStops.sort((a, b) => {
-                    const orderA = parseInt(a['Order']) || 999;
-                    const orderB = parseInt(b['Order']) || 999;
+                    const orderA = parseInt(a[orderColumn]) || 999;
+                    const orderB = parseInt(b[orderColumn]) || 999;
                     return orderA - orderB;
                 });
                 
@@ -1019,7 +1026,7 @@
                         return;
                     }
                     
-                    const stopOrder = parseInt(stop['Order']) || (index + 1);
+                    const stopOrder = parseInt(stop[orderColumn]) || (index + 1);
 
                     // Create bus stop icon
                     const stopIcon = L.divIcon({
@@ -1050,7 +1057,7 @@
                             <div class="custom-popup">
                                 <h4>${stop['Stop Name'] || 'Bus Stop'}</h4>
                                 <p><strong>Bus Number:</strong> ${stop['Bus Number']}</p>
-                                <p><strong>Order:</strong> ${stop['Order'] || index + 1}</p>
+                                <p><strong>${orderColumn}:</strong> ${stopOrder}</p>
                                 <p><strong>Coordinates:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
                             </div>
                         `);
@@ -1133,12 +1140,12 @@
                 const busLocation = this.lastBusLocation;
                 const speed = Math.max(this.lastSpeed, 5); // Minimum 5 km/h for calculation
                 
-                // Find next stops based on route direction, not sheet order
-                const nextStops = this.findNextStopsOnRoute(busLocation);
+                // Find next stops based on order sequence, not route position
+                const nextStops = this.findNextStopsInOrder(busLocation);
                 const etas = [];
                 
-                // Calculate ETA for next 5 stops along the route
-                nextStops.slice(0, 5).forEach(stopData => {
+                // Calculate ETA for next stops following the order
+                nextStops.forEach(stopData => {
                     const distance = this.calculateDistance(busLocation, stopData.coordinates);
                     const timeInHours = distance / speed;
                     const timeInMinutes = Math.round(timeInHours * 60);
@@ -1152,6 +1159,36 @@
                 });
                 
                 return etas;
+            }
+
+            findNextStopsInOrder(busLocation) {
+                if (this.stopMarkers.length === 0) return [];
+                
+                // Find current closest stop to determine position in sequence
+                let closestStopIndex = 0;
+                let minDistance = Infinity;
+                
+                this.stopMarkers.forEach((stopData, index) => {
+                    const distance = this.calculateDistance(busLocation, stopData.coordinates);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestStopIndex = index;
+                    }
+                });
+                
+                // Return next stops in order sequence
+                const nextStops = [];
+                for (let i = closestStopIndex; i < this.stopMarkers.length && nextStops.length < 5; i++) {
+                    const stopData = this.stopMarkers[i];
+                    const distance = this.calculateDistance(busLocation, stopData.coordinates);
+                    
+                    // Only include stops that are ahead (more than 100 meters away)
+                    if (distance > 0.1) { // 0.1 km = 100 meters
+                        nextStops.push(stopData);
+                    }
+                }
+                
+                return nextStops;
             }
 
             findNextStopsOnRoute(busLocation) {
@@ -1216,8 +1253,15 @@
                 const etas = this.calculateETA();
                 
                 etas.forEach(eta => {
+                    // Alert for 5 minutes or less
                     if (eta.eta <= 5 && eta.eta > 0) {
-                        this.showAlert(`Bus No ${this.BUS_NUMBER} is ${eta.eta} mins away from ${eta.stop['Stop Name']} stop`);
+                        console.log(`ETA Alert: Bus No ${this.BUS_NUMBER} is ${eta.eta} mins away from ${eta.stop['Stop Name']} stop`);
+                        this.showAlert(`Bus No ${this.BUS_NUMBER} will reach ${eta.stop['Stop Name']} stop in ${eta.eta} minutes`);
+                    }
+                    // Alert for 10 minutes or less (but more than 5)
+                    else if (eta.eta <= 10 && eta.eta > 5) {
+                        console.log(`ETA Alert: Bus No ${this.BUS_NUMBER} is ${eta.eta} mins away from ${eta.stop['Stop Name']} stop`);
+                        this.showAlert(`Bus No ${this.BUS_NUMBER} will reach ${eta.stop['Stop Name']} stop in ${eta.eta} minutes`);
                     }
                 });
                 
