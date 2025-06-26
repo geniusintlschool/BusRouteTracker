@@ -478,6 +478,43 @@
 
                 // Update or create bus info label
                 this.updateBusInfoLabel(newLocation);
+            }
+
+            animateBusMovement(fromLocation, toLocation, speed) {
+                const steps = 30; // Number of animation steps
+                const stepTime = 500; // Duration per step in milliseconds
+                let currentStep = 0;
+                
+                const latDiff = toLocation[0] - fromLocation[0];
+                const lngDiff = toLocation[1] - fromLocation[1];
+                
+                const animation = setInterval(() => {
+                    currentStep++;
+                    const progress = currentStep / steps;
+                    
+                    // Use easing function for smooth movement
+                    const easedProgress = this.easeInOutQuad(progress);
+                    
+                    const currentLat = fromLocation[0] + (latDiff * easedProgress);
+                    const currentLng = fromLocation[1] + (lngDiff * easedProgress);
+                    
+                    // Update marker position
+                    this.currentLocationMarker.setLatLng([currentLat, currentLng]);
+                    
+                    // Update info label position
+                    this.updateBusInfoLabel([currentLat, currentLng]);
+                    
+                    if (currentStep >= steps) {
+                        clearInterval(animation);
+                        // Ensure final position is exact
+                        this.currentLocationMarker.setLatLng(toLocation);
+                        this.updateBusInfoLabel(toLocation);
+                    }
+                }, stepTime / steps);
+            }
+            
+            easeInOutQuad(t) {
+                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
                 // Only zoom on initial load or when requested
                 if (shouldZoom) {
