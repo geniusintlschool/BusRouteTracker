@@ -363,82 +363,55 @@
             }
 
             async displayHistoricalRoute(historicalData) {
-                if (historicalData.length === 0) {
-                    console.warn('No historical data found for the specified time range');
-                    return;
-                }
+                // Use the provided filtered route coordinates for Bus No 4
+                const routeCoordinates = [
+                    [11.707203, 76.178753], [11.707203, 76.178753], [11.707043, 76.178674], [11.703089, 76.176372],
+                    [11.70215, 76.175898], [11.699329, 76.174175], [11.698983, 76.173874], [11.69897, 76.173627],
+                    [11.69897, 76.173627], [11.693091, 76.175683], [11.693091, 76.175683], [11.693091, 76.175683],
+                    [11.692489, 76.171257], [11.692894, 76.169505], [11.690033, 76.163223], [11.690155, 76.162754],
+                    [11.690275, 76.162408], [11.69037, 76.161508], [11.690206, 76.160369], [11.690047, 76.163146],
+                    [11.690286, 76.163855], [11.691306, 76.165319], [11.691746, 76.166104], [11.691746, 76.166104],
+                    [11.691746, 76.166104], [11.691746, 76.166104], [11.691746, 76.166104], [11.691746, 76.166104],
+                    [11.68323, 76.1649], [11.68323, 76.1649], [11.679817, 76.16187], [11.674429, 76.158919],
+                    [11.674429, 76.158919], [11.673687, 76.157864], [11.673431, 76.156758], [11.670298, 76.150902],
+                    [11.672108, 76.148321], [11.672297, 76.147892], [11.672262, 76.148062], [11.66598, 76.157013],
+                    [11.665356, 76.158277], [11.665356, 76.158277], [11.663222, 76.160824], [11.658865, 76.16108],
+                    [11.657806, 76.160551], [11.65776, 76.160523], [11.65776, 76.160523], [11.653527, 76.154115],
+                    [11.65327, 76.143409], [11.652043, 76.142324], [11.651361, 76.141892], [11.651361, 76.141892],
+                    [11.638766, 76.145734], [11.638079, 76.147841], [11.636767, 76.149675], [11.631102, 76.150658],
+                    [11.623348, 76.156827], [11.619435, 76.15801], [11.619255, 76.158062], [11.61907, 76.158193],
+                    [11.619354, 76.167932], [11.619354, 76.167932], [11.617481, 76.160904], [11.619013, 76.158224],
+                    [11.619173, 76.158089], [11.629105, 76.152701], [11.62928, 76.15247], [11.638774, 76.145684],
+                    [11.639721, 76.14539], [11.640015, 76.145458], [11.650805, 76.141346], [11.649996, 76.140488],
+                    [11.649307, 76.137058], [11.649246, 76.134996], [11.649136, 76.132484], [11.648907, 76.128197],
+                    [11.64229, 76.110991], [11.641959, 76.110759], [11.641778, 76.110718], [11.641778, 76.110718],
+                    [11.641694, 76.110861], [11.63811, 76.101998], [11.636936, 76.10055], [11.63609, 76.0916],
+                    [11.634211, 76.090231], [11.634222, 76.090191], [11.634222, 76.090191], [11.636535, 76.097234],
+                    [11.637145, 76.100888], [11.641326, 76.109974]
+                ];
 
-                // Extract coordinates from historical data
-                const coordinates = historicalData
-                    .map(record => {
-                        const lat = parseFloat(record['Latitude']);
-                        const lng = parseFloat(record['Longitude']);
-                        return !isNaN(lat) && !isNaN(lng) ? [lng, lat] : null; // ORS expects [lng, lat]
-                    })
-                    .filter(coord => coord !== null);
+                console.log(`Displaying route with ${routeCoordinates.length} coordinate points`);
 
-                if (coordinates.length < 2) {
-                    console.warn('Insufficient coordinate data for route snapping');
-                    return;
-                }
+                // Create route polyline using the filtered coordinates
+                this.routeLayer = L.polyline(routeCoordinates, {
+                    color: '#ff9800',
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(this.map);
 
-                try {
-                    // Get snapped route from OpenRouteService
-                    const snappedRoute = await this.getSnappedRoute(coordinates);
-                    
-                    if (snappedRoute && snappedRoute.length > 0) {
-                        // Convert back to [lat, lng] for Leaflet
-                        const leafletCoords = snappedRoute.map(coord => [coord[1], coord[0]]);
-                        
-                        // Create route polyline
-                        this.routeLayer = L.polyline(leafletCoords, {
-                            color: '#ff9800',
-                            weight: 4,
-                            opacity: 0.7
-                        }).addTo(this.map);
+                // Add popup to route
+                this.routeLayer.bindPopup(`
+                    <div class="custom-popup">
+                        <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
+                        <p><strong>Date:</strong> June 25, 2025</p>
+                        <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
+                        <p><strong>Route Points:</strong> ${routeCoordinates.length}</p>
+                        <p><em>Filtered GPS route data</em></p>
+                    </div>
+                `);
 
-                        // Add popup to route
-                        this.routeLayer.bindPopup(`
-                            <div class="custom-popup">
-                                <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
-                                <p><strong>Date:</strong> June 25, 2025</p>
-                                <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
-                                <p><strong>Data Points:</strong> ${historicalData.length}</p>
-                            </div>
-                        `);
-
-                        // Fit map to show the route
-                        this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
-                    }
-                } catch (error) {
-                    console.error('Error creating snapped route:', error);
-                    // Fallback: show simple polyline without snapping
-                    const fallbackCoords = coordinates.map(coord => [coord[1], coord[0]]);
-                    this.routeLayer = L.polyline(fallbackCoords, {
-                        color: '#ff9800',
-                        weight: 4,
-                        opacity: 0.7,
-                        dashArray: '5, 10'
-                    }).addTo(this.map);
-                    
-                    console.log(`Displaying fallback route with ${fallbackCoords.length} points`);
-                    
-                    // Add popup to fallback route
-                    this.routeLayer.bindPopup(`
-                        <div class="custom-popup">
-                            <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
-                            <p><strong>Date:</strong> June 25, 2025</p>
-                            <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
-                            <p><strong>Data Points:</strong> ${historicalData.length}</p>
-                            <p><em>Route snapping unavailable - showing GPS trail</em></p>
-                        </div>
-                    `);
-                    
-                    // Fit map to show the route
-                    if (fallbackCoords.length > 0) {
-                        this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
-                    }
-                }
+                // Fit map to show the complete route
+                this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
             }
 
             async getSnappedRoute(coordinates) {
@@ -508,32 +481,21 @@
                 console.log(`Processing ${busStops.length} bus stops`);
                 
                 busStops.forEach((stop, index) => {
-                    console.log(`Processing stop ${index + 1}: ${stop['Stop Name']}`);
-                    console.log(`Raw Lat: "${stop['Latitude']}", Raw Lng: "${stop['Longitude']}"`);
+                    let lat, lng;
                     
-                    let lat = parseFloat(stop['Latitude']);
-                    let lng = parseFloat(stop['Longitude']);
-                    
-                    console.log(`Direct parseFloat results: lat=${lat}, lng=${lng}`);
-
-                    // If direct parsing fails, try DMS conversion
-                    if (isNaN(lat)) {
-                        console.log(`Converting latitude from DMS: "${stop['Latitude']}"`);
+                    // Check if coordinates are in DMS format (contain ° character)
+                    if (stop['Latitude'].includes('°')) {
                         lat = this.convertDMSToDecimal(stop['Latitude']);
-                        console.log(`DMS conversion result for lat: ${lat}`);
-                    }
-                    if (isNaN(lng)) {
-                        console.log(`Converting longitude from DMS: "${stop['Longitude']}"`);
                         lng = this.convertDMSToDecimal(stop['Longitude']);
-                        console.log(`DMS conversion result for lng: ${lng}`);
+                    } else {
+                        lat = parseFloat(stop['Latitude']);
+                        lng = parseFloat(stop['Longitude']);
                     }
 
                     if (isNaN(lat) || isNaN(lng)) {
                         console.warn(`Invalid coordinates for stop: ${stop['Stop Name']}`, stop['Latitude'], stop['Longitude']);
                         return;
                     }
-                    
-                    console.log(`Final coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
 
                     // Create bus stop icon
                     const stopIcon = L.divIcon({
