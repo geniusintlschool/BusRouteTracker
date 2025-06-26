@@ -52,11 +52,14 @@ function filterBus4Route(historyData, headers) {
       const timeStr = row[timeCol];
       
       // Filter date and time range (June 25, 2025, 3:30-5:30 PM)
-      if (timeStr && timeStr.includes('6/25/2025')) {
-        const timePart = timeStr.split(' ')[1];
-        if (timePart) {
-          const hour = parseInt(timePart.split(':')[0]);
-          if (hour >= 15 && hour <= 17) {
+      if (timeStr) {
+        // Convert to string if it's a Date object
+        const timeString = timeStr.toString();
+        if (timeString.includes('6/25/2025')) {
+          const timePart = timeString.split(' ')[1];
+          if (timePart) {
+            const hour = parseInt(timePart.split(':')[0]);
+            if (hour >= 15 && hour <= 17) {
             route.push({
               lat: parseFloat(row[latCol]),
               lng: parseFloat(row[lngCol]),
