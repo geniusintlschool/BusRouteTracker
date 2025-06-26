@@ -148,6 +148,12 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
+        // Global error handling for unhandled promise rejections
+        window.addEventListener('unhandledrejection', event => {
+            console.warn('Unhandled promise rejection:', event.reason);
+            event.preventDefault(); // Prevent the default browser behavior
+        });
+
         class BusTracker {
             constructor() {
                 this.map = null;
@@ -193,6 +199,7 @@
             }
 
             async loadInitialData() {
+                let bus4Locations = [];
                 try {
                     this.showLoading(true);
                     
@@ -204,7 +211,7 @@
                     ]);
 
                     // Filter data for Bus No 4
-                    const bus4Locations = busLocations.filter(bus => parseInt(bus['Bus Number']) === this.BUS_NUMBER);
+                    bus4Locations = busLocations.filter(bus => parseInt(bus['Bus Number']) === this.BUS_NUMBER);
                     const bus4History = this.filterHistoricalData(busHistory);
                     this.busStops = busStops.filter(stop => parseInt(stop['Bus Number']) === this.BUS_NUMBER);
 
@@ -224,8 +231,8 @@
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
-                    // Only show error if we actually failed to load critical data
-                    if (!bus4Locations || bus4Locations.length === 0) {
+                    // Show appropriate error message
+                    if (bus4Locations.length === 0) {
                         this.showError('Failed to load bus location data. Please check your internet connection and try again.');
                     }
                     this.showLoading(false);
@@ -245,6 +252,7 @@
                     }
                 } catch (error) {
                     console.warn('Failed to update bus location:', error);
+                    // Don't show error to user for routine updates, just log it
                 }
             }
 
@@ -258,11 +266,16 @@
             }
 
             async fetchData(url) {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Failed to fetch data from ${url}:`, error);
+                    throw error; // Re-throw to be handled by calling function
                 }
-                return await response.json();
             }
 
             filterHistoricalData(busHistory) {
@@ -622,6 +635,9 @@
                                 radiuses: orsCoords.map(() => 1000),
                                 continue_straight: false
                             })
+                        }).catch(error => {
+                            console.warn(`Network error for segment ${Math.floor(i/(segmentSize-1)) + 1}:`, error);
+                            return { ok: false, status: 'network_error' };
                         });
 
                         if (response.ok) {
