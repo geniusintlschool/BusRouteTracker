@@ -161,3 +161,8 @@ June 26, 2025:
 - ✓ Implemented ultra-smooth continuous movement with 3-second micro-increments
 - ✓ Bus coordinates change smoothly between GPS updates instead of large jumps
 - ✓ System provides realistic continuous tracking with proper movement timing
+- ✓ Fixed ETA calculations to use route-following distance instead of straight-line distance
+- ✓ Added calculateRouteDistance() function using snapped route waypoints for accurate ETAs
+- ✓ Enhanced continuous movement system with visible micro-updates every 2 seconds
+- ✓ Bus successfully completed route progression from KARAPUZHA to EDAPATTY area
+- ✓ System now approaching final KAINATTY stops with accurate distance-based ETAs
