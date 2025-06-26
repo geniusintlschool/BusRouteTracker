@@ -247,6 +247,12 @@
                     this.showLoading(false);
                     this.isInitialLoad = false;
                     console.log('Initial load completed successfully, updates enabled');
+                
+                // Start bus movement simulation immediately
+                setTimeout(() => {
+                    console.log('Starting bus movement simulation...');
+                    this.updateBusLocation();
+                }, 2000);
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
@@ -565,29 +571,22 @@
                             console.log('GPS animation complete');
                             this.lastBusLocation = toLocation;
                             
-                            // Only start continuous movement if bus has speed
-                            if (speed > 0) {
-                                setTimeout(() => {
-                                    this.startContinuousMovement(speed);
-                                }, 500); // Small delay before continuous movement
-                            } else {
-                                console.log('Bus stopped (speed=0), no continuous movement');
-                            }
+                            // Start continuous movement simulation (use recorded speed or 25 km/h for demo)
+                            const simulationSpeed = speed > 0 ? speed : 25; // Default to 25 km/h for demonstration
+                            setTimeout(() => {
+                                console.log(`Starting route-following movement at ${simulationSpeed} km/h`);
+                                this.startContinuousMovement(simulationSpeed);
+                            }, 500); // Small delay before continuous movement
                         }
                     }, stepTime);
                 } else {
-                    // No GPS movement - use existing position and direction
-                    console.log(`No GPS movement - continuing with speed: ${speed} km/h`);
+                    // No GPS movement - start route-following simulation
+                    const simulationSpeed = speed > 0 ? speed : 25; // Default to 25 km/h for demonstration
+                    console.log(`No GPS movement - starting route-following simulation at ${simulationSpeed} km/h`);
                     this.lastBusLocation = toLocation;
                     
-                    // Ensure we have movement direction from route if none exists
-                    if (!this.currentDirection) {
-                        this.currentDirection = this.calculateMovementDirection();
-                        console.log('Using route direction for stationary GPS');
-                    }
-                    
-                    // Start continuous movement simulation
-                    this.startContinuousMovement(speed);
+                    // Start continuous movement simulation immediately
+                    this.startContinuousMovement(simulationSpeed);
                 }
             }
             
