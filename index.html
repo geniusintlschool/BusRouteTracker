@@ -599,6 +599,22 @@
                 }
                 
                 // Always animate movement smoothly, even for small movements
+                console.log(`Distance check: ${distance}, threshold: 0.000001, will animate: ${distance > 0.000001}`);
+                
+                // Force continuous movement to start after GPS update regardless of movement
+                setTimeout(() => {
+                    console.log(`Forcing continuous movement check: Speed: ${speed}, Ignition: ${this.busIgnition}`);
+                    if (this.busIgnition === "ON") {
+                        if (speed > 0) {
+                            console.log(`Force starting continuous movement at ${speed} km/h`);
+                            this.startContinuousMovement(speed);
+                        } else {
+                            console.log('Force starting gradual movement (speed = 0)');
+                            this.startContinuousMovement(0);
+                        }
+                    }
+                }, 1000);
+                
                 if (distance > 0.000001) { // Animate even tiny movements
                     console.log(`GPS movement detected: ${(distance * 111000).toFixed(0)}m - starting smooth animation`);
                     
@@ -645,14 +661,17 @@
                     }, stepTime);
                 } else {
                     // No GPS movement but start continuous movement if ignition is ON
-                    console.log('No GPS movement detected - checking if continuous movement should start');
+                    console.log(`No GPS movement detected - checking continuous movement. Speed: ${speed}, Ignition: ${this.busIgnition}`);
                     this.lastBusLocation = toLocation;
                     
                     if (this.busIgnition === "ON" && speed > 0) {
                         console.log(`Starting continuous movement at ${speed} km/h (no GPS movement)`);
                         this.startContinuousMovement(speed);
+                    } else if (this.busIgnition === "ON" && speed === 0) {
+                        console.log('Speed is 0 but ignition ON - starting continuous movement with gradual speed');
+                        this.startContinuousMovement(0); // This will trigger gradual movement
                     } else {
-                        console.log('Bus ignition OFF or speed 0 - no movement');
+                        console.log(`Bus ignition: ${this.busIgnition}, speed: ${speed} - no movement`);
                     }
                 }
             }
