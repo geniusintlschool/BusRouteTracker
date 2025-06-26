@@ -508,15 +508,24 @@
                 console.log(`Processing ${busStops.length} bus stops`);
                 
                 busStops.forEach((stop, index) => {
+                    console.log(`Processing stop ${index + 1}: ${stop['Stop Name']}`);
+                    console.log(`Raw Lat: "${stop['Latitude']}", Raw Lng: "${stop['Longitude']}"`);
+                    
                     let lat = parseFloat(stop['Latitude']);
                     let lng = parseFloat(stop['Longitude']);
+                    
+                    console.log(`Direct parseFloat results: lat=${lat}, lng=${lng}`);
 
                     // If direct parsing fails, try DMS conversion
                     if (isNaN(lat)) {
+                        console.log(`Converting latitude from DMS: "${stop['Latitude']}"`);
                         lat = this.convertDMSToDecimal(stop['Latitude']);
+                        console.log(`DMS conversion result for lat: ${lat}`);
                     }
                     if (isNaN(lng)) {
+                        console.log(`Converting longitude from DMS: "${stop['Longitude']}"`);
                         lng = this.convertDMSToDecimal(stop['Longitude']);
+                        console.log(`DMS conversion result for lng: ${lng}`);
                     }
 
                     if (isNaN(lat) || isNaN(lng)) {
@@ -524,7 +533,7 @@
                         return;
                     }
                     
-                    console.log(`Adding stop: ${stop['Stop Name']} at ${lat}, ${lng}`);
+                    console.log(`Final coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
 
                     // Create bus stop icon
                     const stopIcon = L.divIcon({
