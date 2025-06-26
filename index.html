@@ -327,11 +327,15 @@
                 const lat = parseFloat(currentLocation['Latitude']);
                 const lng = parseFloat(currentLocation['Longitude']);
                 const speed = parseFloat(currentLocation['Speed']) || 0;
+                const ignition = currentLocation['Ignition'];
 
                 if (isNaN(lat) || isNaN(lng)) {
                     console.warn('Invalid coordinates for current location');
                     return;
                 }
+
+                // Store ignition status for ETA calculations
+                this.busIgnition = ignition;
 
                 // Create custom yellow bus icon with direction
                 const busIcon = L.divIcon({
@@ -446,14 +450,19 @@
             }
 
             updateBusInfoLabel(busLocation) {
-                const etas = this.calculateETA();
                 let labelText = `Bus No ${this.BUS_NUMBER}`;
                 
-                if (etas.length > 0) {
-                    const nextStop = etas[0];
-                    labelText += `, ${nextStop.eta} mins to ${nextStop.stop['Stop Name']}`;
+                // Check if bus is idle (ignition OFF)
+                if (this.busIgnition === 'OFF' || this.busIgnition === 'FALSE' || this.busIgnition === false) {
+                    labelText += ', IDLE';
                 } else {
-                    labelText += ', Calculating ETA...';
+                    const etas = this.calculateETA();
+                    if (etas.length > 0) {
+                        const nextStop = etas[0];
+                        labelText += `, ${nextStop.eta} mins to ${nextStop.stop['Stop Name']}`;
+                    } else {
+                        labelText += ', Calculating ETA...';
+                    }
                 }
                 
                 if (!this.busInfoLabel) {
