@@ -190,3 +190,9 @@ June 26, 2025:
 - ✓ GPS coordinates [11.651361, 76.141892] successfully overridden with snapped coordinates [11.720200, 76.182000]
 - ✓ Bus positioned at route point 104/105 with continuous movement along snapped route
 - ✓ System maintains GPS tracking accuracy while ensuring visual alignment on route
+- ✓ Implemented smooth movement logic between bus stops with 10-second stops and gradual movement
+- ✓ Stop arrival detection within 100m radius triggers automatic 10-second pause when ignition is ON
+- ✓ After stop pause, bus moves gradually at 5-15 km/h speed along route to next stop in Evening Order sequence
+- ✓ GPS refresh interrupts movement and adjusts position/speed based on real BusLocations data
+- ✓ System preserves existing 60-second GPS tracking while adding smooth inter-stop movement
+- ✓ Bus currently at [11.638774, 76.145684] approaching KARAPUZHA area with movement system ready
