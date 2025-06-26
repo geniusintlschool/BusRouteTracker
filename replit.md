@@ -140,6 +140,7 @@ June 26, 2025:
 - ✓ System now uses real speed from BusLocations data during GPS updates
 - ✓ Bus movement automatically adjusts to actual recorded speeds when ignition is ON
 - ✓ Embedded snapped route data directly in HTML (105 road-following points)
-- ✓ Bus now follows precise road paths with guaranteed smooth movement
-- ✓ Eliminated external API dependencies for route snapping
-- ✓ Complete working bus tracker with realistic road-following movement ready for deployment
+- ✓ Simplified to GPS-only updates every 60 seconds (no continuous movement)
+- ✓ Eliminated complex route-following animation causing movement issues
+- ✓ Bus tracker now works reliably with clean GPS position updates only
+- ✓ Complete stable bus tracker ready for deployment
