@@ -278,19 +278,10 @@
                 // Update bus location every 15 seconds
                 console.log('Starting 15-second location update timer');
                 
-                // Force enable updates after 30 seconds regardless of initial load status
-                setTimeout(() => {
-                    console.log('Force enabling location updates after 30 seconds');
-                    this.isInitialLoad = false;
-                }, 30000);
-                
+                // Start updates immediately after 15 seconds, regardless of initial load
                 setInterval(() => {
-                    if (!this.isInitialLoad) {
-                        console.log('Timer triggered: calling updateBusLocation()');
-                        this.updateBusLocation();
-                    } else {
-                        console.log('Timer triggered: skipping update (initial load in progress)');
-                    }
+                    console.log('Timer triggered: calling updateBusLocation()');
+                    this.updateBusLocation();
                 }, 15000);
             }
 
