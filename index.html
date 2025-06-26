@@ -505,8 +505,18 @@
                         console.log(`Animating bus from [${this.lastBusLocation[0].toFixed(6)}, ${this.lastBusLocation[1].toFixed(6)}] to [${newLocation[0].toFixed(6)}, ${newLocation[1].toFixed(6)}] at ${speed} km/h`);
                         this.animateBusMovement(this.lastBusLocation, newLocation, speed);
                     } else {
-                        console.log('Initial bus position set - no continuous movement');
+                        console.log('Initial bus position set - starting continuous movement');
                         this.currentLocationMarker.setLatLng(newLocation);
+                        this.lastBusLocation = newLocation;
+                        
+                        // Start continuous movement even on initial position
+                        setTimeout(() => {
+                            console.log(`Initial position continuous movement: Speed: ${speed}, Ignition: ${this.busIgnition}`);
+                            if (this.busIgnition === "ON" && speed > 0) {
+                                console.log(`Starting initial continuous movement at ${speed} km/h`);
+                                this.startContinuousMovement(speed);
+                            }
+                        }, 2000);
                     }
                     
                     // Update popup content
@@ -601,24 +611,18 @@
                 // Always animate movement smoothly, even for small movements
                 console.log(`Distance check: ${distance}, threshold: 0.000001, will animate: ${distance > 0.000001}`);
                 
-                // Force continuous movement to start after GPS update regardless of movement
-                setTimeout(() => {
-                    console.log(`Forcing continuous movement check: Speed: ${speed}, Ignition: ${this.busIgnition}`);
-                    if (this.busIgnition === "ON") {
-                        if (speed > 0) {
-                            console.log(`Force starting continuous movement at ${speed} km/h`);
-                            this.startContinuousMovement(speed);
-                        } else {
-                            console.log('Force starting gradual movement (speed = 0)');
-                            this.startContinuousMovement(0);
-                        }
-                    }
-                }, 1000);
+                // Always start continuous movement after GPS update
+                console.log(`Starting continuous movement after GPS update: Speed=${speed}, Ignition=${this.busIgnition}`);
+                this.startSimpleContinuousMovement(speed);
                 
                 if (distance > 0.000001) { // Animate even tiny movements
                     console.log(`GPS movement detected: ${(distance * 111000).toFixed(0)}m - starting smooth animation`);
                     
                     // Stop any existing continuous movement or gradual movement
+                    if (this.continuousMovementInterval) {
+                        clearInterval(this.continuousMovementInterval);
+                        this.continuousMovementInterval = null;
+                    }
                     this.stopContinuousMovement();
                     console.log('New GPS update received - stopping any ongoing movement');
                     
@@ -677,7 +681,7 @@
             }
             
             startContinuousMovement(speed) {
-                console.log(`startContinuousMovement called with speed: ${speed}`);
+                console.log(`🎬 startContinuousMovement called with speed: ${speed}`);
                 // Clear any existing movement
                 this.stopContinuousMovement();
                 
@@ -1156,6 +1160,54 @@
                 // Sort by distance and return closest upcoming stop
                 upcomingStops.sort((a, b) => a.distance - b.distance);
                 return upcomingStops[0];
+            }
+
+            // Simple continuous movement that works reliably
+            startSimpleContinuousMovement(speed) {
+                console.log(`Starting simple continuous movement at ${speed} km/h`);
+                
+                // Clear any existing movement
+                if (this.continuousMovementInterval) {
+                    clearInterval(this.continuousMovementInterval);
+                }
+                
+                if (this.busIgnition !== "ON") {
+                    console.log('Bus ignition OFF - no continuous movement');
+                    return;
+                }
+                
+                const movementSpeed = speed > 0 ? speed : Math.floor(Math.random() * 11) + 5; // 5-15 km/h if speed is 0
+                console.log(`Continuous movement starting at ${movementSpeed} km/h`);
+                
+                // Move every 3 seconds
+                this.continuousMovementInterval = setInterval(() => {
+                    if (!this.currentLocationMarker) return;
+                    
+                    const currentPos = this.currentLocationMarker.getLatLng();
+                    const nextStop = this.getNextBusStop([currentPos.lat, currentPos.lng]);
+                    
+                    if (!nextStop) return;
+                    
+                    // Calculate movement towards next stop
+                    const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
+                    const distanceKm = (movementSpeed * 1000 / 3600) * 3; // 3 seconds worth of movement
+                    const newPosition = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, distanceKm / 1000);
+                    
+                    // Update bus position
+                    this.currentLocationMarker.setLatLng(newPosition);
+                    console.log(`Bus moving at ${movementSpeed} km/h towards ${nextStop.stop['Stop Name']}`);
+                    
+                    // Check if reached stop
+                    const distanceToStop = this.calculateDistance(newPosition, nextStop.coordinates) * 1000;
+                    if (distanceToStop < 50) {
+                        console.log(`Reached ${nextStop.stop['Stop Name']} - pausing 5 seconds`);
+                        clearInterval(this.continuousMovementInterval);
+                        setTimeout(() => {
+                            this.startSimpleContinuousMovement(movementSpeed);
+                        }, 5000);
+                    }
+                    
+                }, 3000);
             }
 
             calculateMovementDirection() {
