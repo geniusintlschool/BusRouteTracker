@@ -27,7 +27,7 @@ The application follows an enhanced client-side architecture:
 - **Complete Historical Route**: Displays full Bus No 4 journey from June 25, 3:30-5:30 PM
 - **Road Snapping**: Routes snap to actual roads using OpenRouteService API
 - **Segmented Processing**: Handles long routes by processing in segments to avoid API limits
-- **Direction Arrows**: Visual indicators showing route direction along the path
+- **Clean Route Display**: Professional road-snapped routes without confusing directional arrows
 - **Fallback Display**: GPS trail with dashed lines when road snapping unavailable
 
 ### Bus Stop Management
@@ -106,7 +106,7 @@ June 26, 2025:
 - ✓ All 39 bus stops properly ordered and displayed with converted coordinates
 - ✓ 60-second auto-refresh cycle with continuous movement simulation between updates
 - ✓ Smooth bus movement animations based on actual speed
-- ✓ Direction arrows showing route flow
+- ✓ Clean route visualization without confusing directional arrows
 - ✓ ETA calculations for next 5 stops with 5-minute alerts
 - ✓ GPS-like initial zoom to current bus location
 - ✓ Enhanced bus icon with pulsing animation
@@ -128,7 +128,9 @@ June 26, 2025:
 - ✓ Added continuous movement simulation between GPS updates
 - ✓ Updated to 60-second refresh intervals with continuous movement during intervals
 - ✓ ETA calculations now only occur during GPS refresh (not during movement simulation)
-- ✓ Enhanced ETA calculation to find next stops based on route direction (not sheet order)
+- ✓ Enhanced ETA calculation to find next stops based on morning/evening order columns
 - ✓ Added automatic 10-second stops when bus reaches any bus stop during simulation
 - ✓ Bus stop detection within 50-meter radius during continuous movement
+- ✓ Removed confusing directional arrows from route display
+- ✓ Improved smooth movement system to prevent teleporting between GPS updates
 - ✓ Complete working bus tracker ready for production deployment
