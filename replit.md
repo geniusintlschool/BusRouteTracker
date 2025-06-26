@@ -113,4 +113,6 @@ June 26, 2025:
 - ✓ Fixed unhandled promise rejections causing infinite loading on GitHub Pages
 - ✓ Added global error handling for network failures and API timeouts
 - ✓ App successfully loads from GitHub Pages deployment
+- ✓ Fixed 15-second auto-refresh mechanism for real-time location updates
+- ✓ Confirmed automatic data fetching from BusLocations sheet working
 - → Ready for Telegram Mini App configuration
