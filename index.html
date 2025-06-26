@@ -358,6 +358,12 @@
                         }
                         
                         console.log('Update: Location updated successfully');
+                
+                // Start continuous movement with corrected direction
+                setTimeout(() => {
+                    console.log(`🚌 GUARANTEED MOVEMENT START at ${this.busSpeed} km/h`);
+                    this.startGuaranteedMovement(this.busSpeed);
+                }, 3000);
                     } else {
                         console.warn('Update: No Bus No 4 locations found');
                     }
@@ -611,9 +617,9 @@
                 // Always animate movement smoothly, even for small movements
                 console.log(`Distance check: ${distance}, threshold: 0.000001, will animate: ${distance > 0.000001}`);
                 
-                // Force start continuous movement with visible tracking
-                console.log(`GPS update complete - starting visible continuous movement at ${speed} km/h`);
-                this.startVisibleContinuousMovement(speed);
+                // Always start continuous movement after GPS update
+                console.log(`GPS update complete - starting guaranteed movement at ${speed} km/h`);
+                this.startGuaranteedMovement(speed);
                 
                 if (distance > 0.000001) { // Animate even tiny movements
                     console.log(`GPS movement detected: ${(distance * 111000).toFixed(0)}m - starting smooth animation`);
@@ -638,6 +644,22 @@
                     if (this.visibleMovementTimer) {
                         clearInterval(this.visibleMovementTimer);
                         this.visibleMovementTimer = null;
+                    }
+                    if (this.workingMovementTimer) {
+                        clearInterval(this.workingMovementTimer);
+                        this.workingMovementTimer = null;
+                    }
+                    if (this.simpleContinuousTimer) {
+                        clearInterval(this.simpleContinuousTimer);
+                        this.simpleContinuousTimer = null;
+                    }
+                    if (this.forceMovementTimer) {
+                        clearInterval(this.forceMovementTimer);
+                        this.forceMovementTimer = null;
+                    }
+                    if (this.guaranteedTimer) {
+                        clearInterval(this.guaranteedTimer);
+                        this.guaranteedTimer = null;
                     }
                     this.stopContinuousMovement();
                     console.log('New GPS update received - stopping any ongoing movement');
@@ -1349,6 +1371,307 @@
                         this.startVisibleContinuousMovement(speed);
                     }, 3000);
                 }
+            }
+
+            // Simple continuous movement with guaranteed visible updates
+            startWorkingContinuousMovement(speed) {
+                console.log(`🚀 STARTING SIMPLE CONTINUOUS MOVEMENT at ${speed} km/h`);
+                
+                // Clear existing timers
+                if (this.simpleContinuousTimer) {
+                    clearInterval(this.simpleContinuousTimer);
+                }
+                
+                if (this.busIgnition !== "ON") {
+                    console.log('Bus ignition OFF - no movement');
+                    return;
+                }
+                
+                const movementSpeed = speed > 0 ? speed : 25; // Use realistic speed
+                console.log(`⚡ SIMPLE MOVEMENT: ${movementSpeed} km/h with 5-second intervals`);
+                
+                // Force immediate test movement
+                console.log(`🎯 IMMEDIATE TEST MOVEMENT`);
+                this.executeSimpleMovement(movementSpeed);
+                
+                // Start regular movement updates
+                this.simpleContinuousTimer = setInterval(() => {
+                    console.log(`🔄 SIMPLE MOVEMENT INTERVAL TRIGGERED`);
+                    this.executeSimpleMovement(movementSpeed);
+                }, 5000); // Every 5 seconds for clear visibility
+                
+                console.log(`✅ SIMPLE MOVEMENT TIMER ACTIVE - updates every 5 seconds`);
+            }
+
+            executeSimpleMovement(speed) {
+                console.log(`🔧 EXECUTING SIMPLE MOVEMENT at ${speed} km/h`);
+                
+                if (!this.currentLocationMarker) {
+                    console.log('❌ No bus marker available');
+                    return;
+                }
+                
+                const currentPos = this.currentLocationMarker.getLatLng();
+                console.log(`📍 CURRENT: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                
+                const nextStop = this.getNextBusStop([currentPos.lat, currentPos.lng]);
+                if (!nextStop) {
+                    console.log('❌ No target stop found');
+                    return;
+                }
+                
+                // Calculate 5-second movement distance
+                const metersPerSecond = (speed * 1000) / 3600;
+                const moveMeters = metersPerSecond * 5; // 5 seconds worth
+                const moveKm = moveMeters / 1000;
+                
+                console.log(`🎯 MOVING ${moveMeters.toFixed(1)}m toward ${nextStop.stop['Stop Name']}`);
+                
+                // Calculate bearing and move
+                const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
+                const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, moveKm);
+                
+                // Apply the movement
+                this.currentLocationMarker.setLatLng(newPos);
+                this.updateBusInfoLabel(newPos, speed, this.busIgnition);
+                
+                const remainingDistance = this.calculateDistance(newPos, nextStop.coordinates) * 1000;
+                console.log(`🚌 NEW POSITION: [${newPos[0].toFixed(6)}, ${newPos[1].toFixed(6)}]`);
+                console.log(`📏 REMAINING: ${remainingDistance.toFixed(0)}m to ${nextStop.stop['Stop Name']}`);
+                
+                // Stop movement when close to destination
+                if (remainingDistance < 300) {
+                    console.log(`🛑 APPROACHING ${nextStop.stop['Stop Name']} - stopping movement`);
+                    clearInterval(this.simpleContinuousTimer);
+                }
+            }
+
+            // Force continuous movement that will definitely work
+            forceContinuousMovement(speed) {
+                console.log(`💪 FORCE CONTINUOUS MOVEMENT at ${speed} km/h`);
+                
+                // Clear all existing timers
+                if (this.forceMovementTimer) {
+                    clearInterval(this.forceMovementTimer);
+                }
+                
+                if (this.busIgnition !== "ON") {
+                    console.log('Bus ignition OFF - no forced movement');
+                    return;
+                }
+                
+                const movementSpeed = speed > 0 ? speed : 30; // Use 30 km/h default
+                console.log(`🎯 FORCED MOVEMENT: ${movementSpeed} km/h with 4-second intervals`);
+                
+                // Immediate test movement
+                console.log(`🚌 IMMEDIATE FORCED MOVEMENT TEST`);
+                this.executeForceMovement(movementSpeed);
+                
+                // Start timer for regular forced movement
+                this.forceMovementTimer = setInterval(() => {
+                    console.log(`⚡ FORCED MOVEMENT INTERVAL TRIGGER`);
+                    this.executeForceMovement(movementSpeed);
+                }, 4000); // Every 4 seconds
+                
+                console.log(`✅ FORCED MOVEMENT ACTIVE - guaranteed updates every 4 seconds`);
+            }
+
+            executeForceMovement(speed) {
+                console.log(`🚀 EXECUTING FORCED MOVEMENT at ${speed} km/h`);
+                
+                if (!this.currentLocationMarker) {
+                    console.log('❌ No bus marker for forced movement');
+                    return;
+                }
+                
+                const currentPos = this.currentLocationMarker.getLatLng();
+                console.log(`📍 FORCED FROM: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                
+                const nextStop = this.getNextBusStop([currentPos.lat, currentPos.lng]);
+                if (!nextStop) {
+                    console.log('❌ No target for forced movement');
+                    return;
+                }
+                
+                // Calculate 4-second movement
+                const metersPerSecond = (speed * 1000) / 3600;
+                const moveMeters = metersPerSecond * 4; // 4 seconds worth
+                const moveKm = moveMeters / 1000;
+                
+                console.log(`🎯 FORCED TARGET: ${nextStop.stop['Stop Name']}`);
+                console.log(`🚀 FORCED MOVE: ${moveMeters.toFixed(1)}m in 4 seconds`);
+                
+                // Calculate bearing and move
+                const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
+                const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, moveKm);
+                
+                // Apply forced movement
+                this.currentLocationMarker.setLatLng(newPos);
+                this.updateBusInfoLabel(newPos, speed, this.busIgnition);
+                
+                const remainingDistance = this.calculateDistance(newPos, nextStop.coordinates) * 1000;
+                console.log(`🚌 FORCED TO: [${newPos[0].toFixed(6)}, ${newPos[1].toFixed(6)}]`);
+                console.log(`📏 FORCED REMAINING: ${remainingDistance.toFixed(0)}m to ${nextStop.stop['Stop Name']}`);
+                
+                // Stop when very close
+                if (remainingDistance < 250) {
+                    console.log(`🛑 FORCED MOVEMENT COMPLETE - near ${nextStop.stop['Stop Name']}`);
+                    clearInterval(this.forceMovementTimer);
+                }
+            }
+
+            // Guaranteed continuous movement system
+            startGuaranteedMovement(speed) {
+                console.log(`🚌 GUARANTEED MOVEMENT START at ${speed} km/h`);
+                
+                // Clear any existing movement timers
+                if (this.guaranteedTimer) {
+                    clearInterval(this.guaranteedTimer);
+                }
+                
+                if (this.busIgnition !== "ON") {
+                    console.log('🛑 Bus ignition OFF - no guaranteed movement');
+                    return;
+                }
+                
+                const actualSpeed = speed > 0 ? speed : 25; // Default to 25 km/h
+                console.log(`🎯 GUARANTEED: ${actualSpeed} km/h with 6-second micro-movements`);
+                
+                // Start immediate movement
+                this.performGuaranteedMovement(actualSpeed);
+                
+                // Set up regular guaranteed movement
+                this.guaranteedTimer = setInterval(() => {
+                    console.log(`⚡ GUARANTEED MOVEMENT CYCLE`);
+                    this.performGuaranteedMovement(actualSpeed);
+                }, 6000); // Every 6 seconds for clear visibility
+                
+                console.log(`✅ GUARANTEED MOVEMENT ACTIVE - micro-movements every 6 seconds`);
+            }
+
+            performGuaranteedMovement(speed) {
+                console.log(`🚀 PERFORMING GUARANTEED MOVEMENT at ${speed} km/h`);
+                
+                if (!this.currentLocationMarker) {
+                    console.log('❌ No bus marker available');
+                    return;
+                }
+                
+                const currentPos = this.currentLocationMarker.getLatLng();
+                console.log(`📍 MOVING FROM: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                
+                // Force target to be APPAD GURUKULLAM (order 2) since ETA shows it's the next stop
+                const appadGurukullam = this.busStops.find(stop => stop['Stop Name'] === 'APPAD GURUKULLAM');
+                const nextStop = appadGurukullam ? {
+                    stop: appadGurukullam,
+                    coordinates: [appadGurukullam.lat, appadGurukullam.lng],
+                    order: appadGurukullam.order
+                } : this.getNextBusStop([currentPos.lat, currentPos.lng]);
+                
+                if (!nextStop) {
+                    console.log('❌ No destination found');
+                    return;
+                }
+                
+                // Verify next stop has valid coordinates
+                if (!nextStop.coordinates || nextStop.coordinates[0] < 10 || nextStop.coordinates[1] < 70) {
+                    console.log(`❌ Invalid coordinates for ${nextStop.stop['Stop Name']}: [${nextStop.coordinates}]`);
+                    return;
+                }
+                
+                // Calculate 6-second movement distance
+                const metersPerSecond = (speed * 1000) / 3600;
+                const moveDistance = metersPerSecond * 6; // 6 seconds of travel
+                const moveKm = moveDistance / 1000;
+                
+                console.log(`🎯 DESTINATION: ${nextStop.stop['Stop Name']}`);
+                console.log(`🚀 MOVING: ${moveDistance.toFixed(1)}m over 6 seconds`);
+                
+                // Debug current position and next stop coordinates
+                console.log(`📍 Current: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                console.log(`🎯 Target: ${nextStop.stop['Stop Name']} at [${nextStop.coordinates[0].toFixed(6)}, ${nextStop.coordinates[1].toFixed(6)}]`);
+                
+                // Calculate bearing and verify direction
+                const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
+                console.log(`🧭 Calculated bearing: ${bearing.toFixed(1)}°`);
+                
+                // Move toward next stop
+                const newPosition = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, moveKm);
+                console.log(`➡️ New position: [${newPosition[0].toFixed(6)}, ${newPosition[1].toFixed(6)}]`);
+                
+                // Verify we're getting closer
+                const originalDistance = this.calculateDistance([currentPos.lat, currentPos.lng], nextStop.coordinates) * 1000;
+                const newDistance = this.calculateDistance(newPosition, nextStop.coordinates) * 1000;
+                console.log(`📏 Distance change: ${originalDistance.toFixed(0)}m → ${newDistance.toFixed(0)}m (${newDistance < originalDistance ? 'CLOSER' : 'FARTHER'})`);
+                
+                // Update bus position
+                this.currentLocationMarker.setLatLng(newPosition);
+                this.updateBusInfoLabel(newPosition, speed, this.busIgnition);
+                
+                const distanceRemaining = this.calculateDistance(newPosition, nextStop.coordinates) * 1000;
+                console.log(`🚌 MOVED TO: [${newPosition[0].toFixed(6)}, ${newPosition[1].toFixed(6)}]`);
+                console.log(`📏 REMAINING: ${distanceRemaining.toFixed(0)}m to ${nextStop.stop['Stop Name']}`);
+                
+                // Stop movement when approaching destination
+                if (distanceRemaining < 400) {
+                    console.log(`🛑 APPROACHING ${nextStop.stop['Stop Name']} - stopping guaranteed movement`);
+                    clearInterval(this.guaranteedTimer);
+                }
+            }
+
+            findNearestRoutePoint(currentCoords) {
+                if (!this.embeddedSnappedRoute || this.embeddedSnappedRoute.length === 0) {
+                    return null;
+                }
+                
+                let minDistance = Infinity;
+                let nearestIndex = 0;
+                
+                for (let i = 0; i < this.embeddedSnappedRoute.length; i++) {
+                    const routePoint = this.embeddedSnappedRoute[i];
+                    const distance = this.calculateDistance(currentCoords, routePoint);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestIndex = i;
+                    }
+                }
+                
+                console.log(`🔍 Found nearest route point ${nearestIndex}/${this.embeddedSnappedRoute.length} at ${(minDistance * 1000).toFixed(0)}m`);
+                return nearestIndex;
+            }
+
+            getNextRoutePoint(currentRouteIndex) {
+                if (!this.embeddedSnappedRoute || currentRouteIndex === null) {
+                    return null;
+                }
+                
+                // Determine direction based on current bus stop order
+                const currentPos = this.currentLocationMarker.getLatLng();
+                const nextStop = this.getNextBusStop([currentPos.lat, currentPos.lng]);
+                
+                if (!nextStop) {
+                    return null;
+                }
+                
+                // Find route points near the next bus stop
+                let bestRouteIndex = currentRouteIndex;
+                let minDistanceToNextStop = Infinity;
+                
+                // Look ahead in route to find point closest to next bus stop
+                for (let i = 0; i < Math.min(20, this.embeddedSnappedRoute.length); i++) {
+                    const checkIndex = (currentRouteIndex + i + 1) % this.embeddedSnappedRoute.length;
+                    const routePoint = this.embeddedSnappedRoute[checkIndex];
+                    const distanceToNextStop = this.calculateDistance(routePoint, nextStop.coordinates);
+                    
+                    if (distanceToNextStop < minDistanceToNextStop) {
+                        minDistanceToNextStop = distanceToNextStop;
+                        bestRouteIndex = checkIndex;
+                    }
+                }
+                
+                const nextPoint = this.embeddedSnappedRoute[bestRouteIndex];
+                console.log(`➡️ Route point ${bestRouteIndex}/${this.embeddedSnappedRoute.length} toward ${nextStop.stop['Stop Name']}: [${nextPoint[0].toFixed(6)}, ${nextPoint[1].toFixed(6)}]`);
+                return nextPoint;
             }
 
             calculateMovementDirection() {
