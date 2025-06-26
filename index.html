@@ -261,15 +261,34 @@
                             ignition: currentLocation['Ignition']
                         });
                         
-                        await this.displayCurrentLocation(bus4Locations, false);
-                        this.updateLastUpdateTime();
-                        this.checkETAAlerts();
+                        try {
+                            await this.displayCurrentLocation(bus4Locations, false);
+                            console.log('Update: Display location completed');
+                        } catch (e) {
+                            console.error('Error in displayCurrentLocation:', e.message);
+                        }
+                        
+                        try {
+                            this.updateLastUpdateTime();
+                            console.log('Update: Last update time updated');
+                        } catch (e) {
+                            console.error('Error in updateLastUpdateTime:', e.message);
+                        }
+                        
+                        try {
+                            this.checkETAAlerts();
+                            console.log('Update: ETA alerts checked');
+                        } catch (e) {
+                            console.error('Error in checkETAAlerts:', e.message);
+                        }
+                        
                         console.log('Update: Location updated successfully');
                     } else {
                         console.warn('Update: No Bus No 4 locations found');
                     }
                 } catch (error) {
                     console.error('Failed to update bus location:', error);
+                    console.error('Error details:', error.message, error.stack);
                     // Don't show error to user for routine updates, but log details
                 }
             }
@@ -971,18 +990,13 @@
 
             // Method to refresh data (can be called externally)
             async refresh() {
-                await this.loadBusData();
+                await this.updateBusLocation();
             }
         }
 
         // Initialize the bus tracker when the page loads
         document.addEventListener('DOMContentLoaded', () => {
             window.busTracker = new BusTracker();
-            
-            // Auto-refresh every 30 seconds
-            setInterval(() => {
-                window.busTracker.refresh();
-            }, 30000);
         });
 
         // Telegram Web App specific initialization
