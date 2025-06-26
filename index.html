@@ -189,6 +189,11 @@
                 this.routeLayer = null;
                 this.stopMarkers = [];
                 this.historicalRoute = [];
+                this.busStops = [];
+                this.routeCoordinates = [];
+                this.lastBusLocation = null;
+                this.lastSpeed = 0;
+                this.isInitialLoad = true;
                 
                 // API Configuration
                 this.ORS_API_KEY = '5b3ce3597851110001cf62486ef5d938c6804787a401d0a56b3236ae';
@@ -198,7 +203,8 @@
                 this.BUS_NUMBER = 4;
                 
                 this.initializeMap();
-                this.loadBusData();
+                this.loadInitialData();
+                this.startLocationUpdates();
             }
 
             initializeMap() {
@@ -212,7 +218,7 @@
                 }).addTo(this.map);
             }
 
-            async loadBusData() {
+            async loadInitialData() {
                 try {
                     this.showLoading(true);
                     
@@ -226,24 +232,52 @@
                     // Filter data for Bus No 4
                     const bus4Locations = busLocations.filter(bus => parseInt(bus['Bus Number']) === this.BUS_NUMBER);
                     const bus4History = this.filterHistoricalData(busHistory);
-                    const bus4Stops = busStops.filter(stop => parseInt(stop['Bus Number']) === this.BUS_NUMBER);
+                    this.busStops = busStops.filter(stop => parseInt(stop['Bus Number']) === this.BUS_NUMBER);
 
                     console.log(`Found ${bus4Locations.length} current locations for Bus No 4`);
-                    console.log(`Found ${bus4Stops.length} bus stops for Bus No 4`);
+                    console.log(`Found ${this.busStops.length} bus stops for Bus No 4`);
 
-                    // Process and display data
-                    await this.displayCurrentLocation(bus4Locations);
+                    // Process and display static data (routes and stops - load once)
                     await this.displayHistoricalRoute(bus4History);
-                    this.displayBusStops(bus4Stops);
+                    this.displayBusStops(this.busStops);
+                    
+                    // Display current location and zoom to it
+                    await this.displayCurrentLocation(bus4Locations, true);
                     
                     this.updateLastUpdateTime();
                     this.showLoading(false);
+                    this.isInitialLoad = false;
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
                     this.showError('Failed to load bus data. Please check your internet connection and try again.');
                     this.showLoading(false);
                 }
+            }
+
+            async updateBusLocation() {
+                try {
+                    // Only fetch current location data
+                    const busLocations = await this.fetchData(`${this.SHEETS_BASE_URL}/BusLocations`);
+                    const bus4Locations = busLocations.filter(bus => parseInt(bus['Bus Number']) === this.BUS_NUMBER);
+                    
+                    if (bus4Locations.length > 0) {
+                        await this.displayCurrentLocation(bus4Locations, false);
+                        this.updateLastUpdateTime();
+                        this.checkETAAlerts();
+                    }
+                } catch (error) {
+                    console.warn('Failed to update bus location:', error);
+                }
+            }
+
+            startLocationUpdates() {
+                // Update bus location every 15 seconds
+                setInterval(() => {
+                    if (!this.isInitialLoad) {
+                        this.updateBusLocation();
+                    }
+                }, 15000);
             }
 
             async fetchData(url) {
@@ -308,7 +342,7 @@
                 return filteredRecords;
             }
 
-            async displayCurrentLocation(busLocations) {
+            async displayCurrentLocation(busLocations, shouldZoom = false) {
                 if (busLocations.length === 0) {
                     console.warn('No current location data found for Bus No 4');
                     return;
@@ -318,48 +352,115 @@
                 const currentLocation = busLocations[busLocations.length - 1];
                 const lat = parseFloat(currentLocation['Latitude']);
                 const lng = parseFloat(currentLocation['Longitude']);
+                const speed = parseFloat(currentLocation['Speed']) || 0;
 
                 if (isNaN(lat) || isNaN(lng)) {
                     console.warn('Invalid coordinates for current location');
                     return;
                 }
 
-                // Create custom yellow bus icon
+                // Create custom yellow bus icon with direction
                 const busIcon = L.divIcon({
                     className: 'bus-icon',
                     html: `
                         <div style="
                             background-color: #ffd700;
-                            width: 30px;
-                            height: 30px;
+                            width: 35px;
+                            height: 35px;
                             border-radius: 50%;
                             border: 3px solid #fff;
                             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            font-size: 16px;
+                            font-size: 18px;
+                            animation: pulse 2s infinite;
                         ">🚌</div>
+                        <style>
+                            @keyframes pulse {
+                                0% { transform: scale(1); }
+                                50% { transform: scale(1.1); }
+                                100% { transform: scale(1); }
+                            }
+                        </style>
                     `,
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17]
                 });
 
-                // Add current location marker
-                this.currentLocationMarker = L.marker([lat, lng], { icon: busIcon })
-                    .addTo(this.map)
-                    .bindPopup(`
+                const newLocation = [lat, lng];
+
+                if (this.currentLocationMarker) {
+                    // Smooth transition to new location
+                    if (this.lastBusLocation) {
+                        this.animateBusMovement(this.lastBusLocation, newLocation, speed);
+                    } else {
+                        this.currentLocationMarker.setLatLng(newLocation);
+                    }
+                    
+                    // Update popup content
+                    this.currentLocationMarker.setPopupContent(`
                         <div class="custom-popup">
                             <h4>Bus No ${this.BUS_NUMBER} - Current Location</h4>
-                            <p><strong>Speed:</strong> ${currentLocation['Speed'] || 'N/A'} km/h</p>
+                            <p><strong>Speed:</strong> ${speed} km/h</p>
                             <p><strong>Ignition:</strong> ${currentLocation['Ignition'] || 'N/A'}</p>
                             <p><strong>Time:</strong> ${currentLocation['Time'] || 'N/A'}</p>
                             <p><strong>Coordinates:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+                            <p><strong>Next Stop ETA:</strong> <span id="next-stop-eta">Calculating...</span></p>
                         </div>
                     `);
+                } else {
+                    // Create new marker
+                    this.currentLocationMarker = L.marker(newLocation, { icon: busIcon })
+                        .addTo(this.map)
+                        .bindPopup(`
+                            <div class="custom-popup">
+                                <h4>Bus No ${this.BUS_NUMBER} - Current Location</h4>
+                                <p><strong>Speed:</strong> ${speed} km/h</p>
+                                <p><strong>Ignition:</strong> ${currentLocation['Ignition'] || 'N/A'}</p>
+                                <p><strong>Time:</strong> ${currentLocation['Time'] || 'N/A'}</p>
+                                <p><strong>Coordinates:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+                                <p><strong>Next Stop ETA:</strong> <span id="next-stop-eta">Calculating...</span></p>
+                            </div>
+                        `);
+                }
 
-                // Center map on current location
-                this.map.setView([lat, lng], 15);
+                // Store current data
+                this.lastBusLocation = newLocation;
+                this.lastSpeed = speed;
+
+                // Only zoom on initial load or when requested
+                if (shouldZoom) {
+                    this.map.setView(newLocation, 16);
+                }
+            }
+
+            animateBusMovement(fromLatLng, toLatLng, speed) {
+                const duration = Math.max(1000, Math.min(5000, 15000 - (speed * 100))); // Adjust animation speed
+                const steps = 30;
+                let currentStep = 0;
+                
+                const latDiff = toLatLng[0] - fromLatLng[0];
+                const lngDiff = toLatLng[1] - fromLatLng[1];
+                
+                const animate = () => {
+                    currentStep++;
+                    const progress = currentStep / steps;
+                    
+                    // Easing function for smooth movement
+                    const easeProgress = 1 - Math.pow(1 - progress, 3);
+                    
+                    const currentLat = fromLatLng[0] + (latDiff * easeProgress);
+                    const currentLng = fromLatLng[1] + (lngDiff * easeProgress);
+                    
+                    this.currentLocationMarker.setLatLng([currentLat, currentLng]);
+                    
+                    if (currentStep < steps) {
+                        setTimeout(animate, duration / steps);
+                    }
+                };
+                
+                animate();
             }
 
             async displayHistoricalRoute(historicalData) {
@@ -399,12 +500,15 @@
                     if (snappedRoute && snappedRoute.length > 0) {
                         console.log(`Got snapped route with ${snappedRoute.length} points`);
                         
-                        // Create route polyline using snapped coordinates
+                        // Create route polyline using snapped coordinates with arrows
                         this.routeLayer = L.polyline(snappedRoute, {
                             color: '#ff9800',
                             weight: 4,
                             opacity: 0.8
                         }).addTo(this.map);
+
+                        // Add direction arrows to the route
+                        this.addDirectionArrows(snappedRoute);
 
                         // Add popup to route
                         this.routeLayer.bindPopup(`
@@ -549,7 +653,14 @@
             displayBusStops(busStops) {
                 console.log(`Processing ${busStops.length} bus stops`);
                 
-                busStops.forEach((stop, index) => {
+                // Sort bus stops by order number
+                const sortedStops = busStops.sort((a, b) => {
+                    const orderA = parseInt(a['Order']) || 999;
+                    const orderB = parseInt(b['Order']) || 999;
+                    return orderA - orderB;
+                });
+                
+                sortedStops.forEach((stop, index) => {
                     let lat, lng;
                     
                     // Check if coordinates are in DMS format (contain ° character)
@@ -565,6 +676,8 @@
                         console.warn(`Invalid coordinates for stop: ${stop['Stop Name']}`, stop['Latitude'], stop['Longitude']);
                         return;
                     }
+                    
+                    const stopOrder = parseInt(stop['Order']) || (index + 1);
 
                     // Create bus stop icon
                     const stopIcon = L.divIcon({
@@ -583,7 +696,7 @@
                                 color: white;
                                 font-size: 10px;
                                 font-weight: bold;
-                            ">${stop['Order'] || index + 1}</div>
+                            ">${stopOrder}</div>
                         `,
                         iconSize: [20, 20],
                         iconAnchor: [10, 10]
@@ -600,8 +713,163 @@
                             </div>
                         `);
 
-                    this.stopMarkers.push(marker);
+                    this.stopMarkers.push({
+                        marker: marker,
+                        stop: stop,
+                        order: stopOrder,
+                        coordinates: [lat, lng]
+                    });
                 });
+            }
+
+            addDirectionArrows(routeCoordinates) {
+                // Add arrow markers at regular intervals along the route
+                const arrowInterval = Math.floor(routeCoordinates.length / 15); // About 15 arrows
+                
+                for (let i = arrowInterval; i < routeCoordinates.length - arrowInterval; i += arrowInterval) {
+                    const current = routeCoordinates[i];
+                    const next = routeCoordinates[i + 1];
+                    
+                    if (current && next) {
+                        // Calculate bearing for arrow direction
+                        const bearing = this.calculateBearing(current, next);
+                        
+                        const arrowIcon = L.divIcon({
+                            className: 'arrow-icon',
+                            html: `
+                                <div style="
+                                    width: 0;
+                                    height: 0;
+                                    border-left: 8px solid transparent;
+                                    border-right: 8px solid transparent;
+                                    border-bottom: 12px solid #ff9800;
+                                    transform: rotate(${bearing}deg);
+                                    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+                                "></div>
+                            `,
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8]
+                        });
+                        
+                        L.marker(current, { icon: arrowIcon }).addTo(this.map);
+                    }
+                }
+            }
+
+            calculateBearing(from, to) {
+                const lat1 = from[0] * Math.PI / 180;
+                const lat2 = to[0] * Math.PI / 180;
+                const deltaLon = (to[1] - from[1]) * Math.PI / 180;
+                
+                const y = Math.sin(deltaLon) * Math.cos(lat2);
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+                
+                const bearing = Math.atan2(y, x) * 180 / Math.PI;
+                return (bearing + 360) % 360;
+            }
+
+            calculateDistance(point1, point2) {
+                const R = 6371; // Earth's radius in km
+                const lat1 = point1[0] * Math.PI / 180;
+                const lat2 = point2[0] * Math.PI / 180;
+                const deltaLat = (point2[0] - point1[0]) * Math.PI / 180;
+                const deltaLon = (point2[1] - point1[1]) * Math.PI / 180;
+                
+                const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                         Math.cos(lat1) * Math.cos(lat2) *
+                         Math.sin(deltaLon/2) * Math.sin(deltaLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                
+                return R * c; // Distance in km
+            }
+
+            calculateETA() {
+                if (!this.lastBusLocation || this.stopMarkers.length === 0 || this.lastSpeed <= 0) {
+                    return [];
+                }
+                
+                const busLocation = this.lastBusLocation;
+                const speed = Math.max(this.lastSpeed, 5); // Minimum 5 km/h for calculation
+                const etas = [];
+                
+                // Get next 5 stops
+                const sortedStops = this.stopMarkers
+                    .sort((a, b) => a.order - b.order)
+                    .slice(0, 5);
+                
+                sortedStops.forEach(stopData => {
+                    const distance = this.calculateDistance(busLocation, stopData.coordinates);
+                    const timeInHours = distance / speed;
+                    const timeInMinutes = Math.round(timeInHours * 60);
+                    
+                    etas.push({
+                        stop: stopData.stop,
+                        order: stopData.order,
+                        distance: distance,
+                        eta: timeInMinutes
+                    });
+                });
+                
+                return etas;
+            }
+
+            checkETAAlerts() {
+                const etas = this.calculateETA();
+                
+                etas.forEach(eta => {
+                    if (eta.eta <= 5 && eta.eta > 0) {
+                        this.showAlert(`Bus No ${this.BUS_NUMBER} is ${eta.eta} mins away from ${eta.stop['Stop Name']} stop`);
+                    }
+                });
+                
+                // Update ETA display in popup if it exists
+                const etaElement = document.getElementById('next-stop-eta');
+                if (etaElement && etas.length > 0) {
+                    const nextStop = etas[0];
+                    etaElement.textContent = `${nextStop.eta} mins to ${nextStop.stop['Stop Name']}`;
+                }
+            }
+
+            showAlert(message) {
+                // Create alert notification
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'eta-alert';
+                alertDiv.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background-color: #4caf50;
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    z-index: 10000;
+                    font-size: 14px;
+                    max-width: 300px;
+                    animation: slideIn 0.3s ease-out;
+                `;
+                alertDiv.textContent = message;
+                
+                // Add animation
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                document.body.appendChild(alertDiv);
+                
+                // Remove alert after 5 seconds
+                setTimeout(() => {
+                    if (alertDiv.parentNode) {
+                        alertDiv.remove();
+                    }
+                }, 5000);
+                
+                console.log(`ETA Alert: ${message}`);
             }
 
             updateLastUpdateTime() {
