@@ -132,5 +132,7 @@ June 26, 2025:
 - ✓ Added automatic 10-second stops when bus reaches any bus stop during simulation
 - ✓ Bus stop detection within 50-meter radius during continuous movement
 - ✓ Removed confusing directional arrows from route display
-- ✓ Improved smooth movement system to prevent teleporting between GPS updates
-- ✓ Complete working bus tracker ready for production deployment
+- ✓ Implemented route-following animation system using snapped route points
+- ✓ Enhanced movement to follow actual roads at recorded speeds with GPS adjustments
+- ✓ Fixed ETA calculations using realistic 25 km/h speed instead of 5 km/h minimum
+- ✓ Complete working bus tracker with realistic movement and accurate ETAs ready for deployment
