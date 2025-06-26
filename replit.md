@@ -147,4 +147,8 @@ June 26, 2025:
 - ✓ Enhanced smooth bus movement transitions between GPS updates
 - ✓ Improved animation parameters: 2-6 second transitions with 60-180 steps
 - ✓ Added enhanced cubic easing function for more natural movement
-- ✓ Complete stable bus tracker ready for deployment
+- ✓ Implemented continuous movement using last recorded speed from BusLocations
+- ✓ Added gradual movement (5-15 km/h) when speed is 0 after 10-second pause
+- ✓ Bus moves continuously towards next stops until new GPS data or reaching stops
+- ✓ System automatically stops any ongoing movement when new GPS updates arrive
+- ✓ Complete stable bus tracker with realistic continuous movement ready for deployment

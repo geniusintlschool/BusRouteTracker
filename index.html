@@ -602,8 +602,9 @@
                 if (distance > 0.000001) { // Animate even tiny movements
                     console.log(`GPS movement detected: ${(distance * 111000).toFixed(0)}m - starting smooth animation`);
                     
-                    // Stop any existing continuous movement
+                    // Stop any existing continuous movement or gradual movement
                     this.stopContinuousMovement();
+                    console.log('New GPS update received - stopping any ongoing movement');
                     
                     // Enhanced smooth animation parameters
                     const minTime = 2000; // Minimum 2 seconds for smoother movement
@@ -631,14 +632,28 @@
                             console.log('GPS animation complete');
                             this.lastBusLocation = toLocation;
                             
-                            // No continuous movement - only GPS updates every 60 seconds
-                            console.log('GPS animation complete - waiting for next 60-second update cycle');
+                            // Start continuous movement at last recorded speed
+                            if (this.busIgnition === "ON" && speed > 0) {
+                                console.log(`GPS animation complete - starting continuous movement at ${speed} km/h`);
+                                setTimeout(() => {
+                                    this.startContinuousMovement(speed);
+                                }, 500);
+                            } else {
+                                console.log('GPS animation complete - bus ignition OFF or speed 0, no continuous movement');
+                            }
                         }
                     }, stepTime);
                 } else {
-                    // No continuous movement - only GPS updates every 60 seconds
-                    console.log('No GPS movement detected - staying at current position until next update');
+                    // No GPS movement but start continuous movement if ignition is ON
+                    console.log('No GPS movement detected - checking if continuous movement should start');
                     this.lastBusLocation = toLocation;
+                    
+                    if (this.busIgnition === "ON" && speed > 0) {
+                        console.log(`Starting continuous movement at ${speed} km/h (no GPS movement)`);
+                        this.startContinuousMovement(speed);
+                    } else {
+                        console.log('Bus ignition OFF or speed 0 - no movement');
+                    }
                 }
             }
             
@@ -663,20 +678,22 @@
                 this.currentStopName = null;
                 
                 if (speed === 0) {
-                    // Bus is stopped - pause for 10 seconds
+                    // Bus is stopped - pause for 10 seconds then move gradually
                     this.isMoving = false;
                     this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), speed, this.busIgnition);
-                    console.log('Bus stopped - pausing for 10 seconds');
+                    console.log('Bus stopped (speed 0) - pausing for 10 seconds then gradual movement');
                     
                     this.stopTimer = setTimeout(() => {
-                        console.log('Stop period ended - checking ignition before resuming');
+                        console.log('Stop period ended - starting gradual movement');
                         this.stopTimer = null;
                         this.isAtStop = false;
                         
                         // Resume only if ignition is ON
                         if (this.busIgnition === "ON") {
-                            console.log('Resuming route-following movement at 20 km/h (ignition ON)');
-                            this.startRouteFollowingMovement(20);
+                            // Start gradual movement at random speed between 5-15 km/h
+                            const gradualSpeed = Math.floor(Math.random() * 11) + 5; // 5-15 km/h
+                            console.log(`Starting gradual movement at ${gradualSpeed} km/h until next GPS update`);
+                            this.startGradualMovement(gradualSpeed);
                         } else {
                             console.log('Bus ignition is OFF - not resuming movement');
                         }
@@ -685,6 +702,50 @@
                 }
                 
                 this.startRouteFollowingMovement(speed);
+            }
+
+            startGradualMovement(speed) {
+                console.log(`Starting gradual movement at ${speed} km/h`);
+                this.stopContinuousMovement();
+                this.isMoving = true;
+                
+                const updateInterval = 3000; // Update every 3 seconds
+                const metersPerSecond = (speed * 1000) / 3600;
+                const metersPerUpdate = metersPerSecond * (updateInterval / 1000);
+                
+                this.movementInterval = setInterval(() => {
+                    if (!this.isMoving || !this.currentLocationMarker) {
+                        return;
+                    }
+                    
+                    const currentPos = this.currentLocationMarker.getLatLng();
+                    
+                    // Find the next bus stop to move towards
+                    const nextStop = this.getNextBusStop([currentPos.lat, currentPos.lng]);
+                    if (!nextStop) {
+                        console.log('No next stop found - stopping gradual movement');
+                        this.stopContinuousMovement();
+                        return;
+                    }
+                    
+                    // Calculate direction towards next stop
+                    const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nextStop.coordinates);
+                    const newPosition = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, metersPerUpdate / 1000);
+                    
+                    // Update bus position
+                    this.currentLocationMarker.setLatLng(newPosition);
+                    this.updateBusInfoLabel(newPosition, speed, this.busIgnition);
+                    
+                    console.log(`Bus moving gradually at ${speed} km/h towards ${nextStop.stop['Stop Name']}`);
+                    
+                    // Check if reached a bus stop
+                    const distanceToNextStop = this.calculateDistance(newPosition, nextStop.coordinates) * 1000;
+                    if (distanceToNextStop < 50) { // Within 50 meters
+                        console.log(`Bus reached ${nextStop.stop['Stop Name']} - stopping gradual movement`);
+                        this.stopContinuousMovement();
+                    }
+                    
+                }, updateInterval);
             }
             
             startRouteFollowingMovement(speed) {
@@ -1024,6 +1085,58 @@
             // Enhanced easing function for smoother movement
             easeInOutCubic(t) {
                 return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            }
+
+            // Calculate bearing between two points
+            calculateBearing(from, to) {
+                const lat1 = from[0] * Math.PI / 180;
+                const lat2 = to[0] * Math.PI / 180;
+                const deltaLng = (to[1] - from[1]) * Math.PI / 180;
+                
+                const y = Math.sin(deltaLng) * Math.cos(lat2);
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+                
+                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            }
+
+            // Move a point by distance in a specific bearing
+            movePointByDistance(point, bearing, distanceKm) {
+                const lat1 = point[0] * Math.PI / 180;
+                const lng1 = point[1] * Math.PI / 180;
+                const bearingRad = bearing * Math.PI / 180;
+                const R = 6371; // Earth's radius in km
+                
+                const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distanceKm / R) + 
+                                     Math.cos(lat1) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
+                const lng2 = lng1 + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(lat1),
+                                              Math.cos(distanceKm / R) - Math.sin(lat1) * Math.sin(lat2));
+                
+                return [lat2 * 180 / Math.PI, lng2 * 180 / Math.PI];
+            }
+
+            // Get next bus stop based on current position
+            getNextBusStop(currentPosition) {
+                if (!this.busStops || this.busStops.length === 0) {
+                    return null;
+                }
+                
+                // Find upcoming stops based on current position and route direction
+                const upcomingStops = [];
+                
+                for (const stop of this.busStops) {
+                    const stopCoords = [parseFloat(stop['Latitude']), parseFloat(stop['Longitude'])];
+                    const distance = this.calculateDistance(currentPosition, stopCoords);
+                    
+                    upcomingStops.push({
+                        stop: stop,
+                        coordinates: stopCoords,
+                        distance: distance
+                    });
+                }
+                
+                // Sort by distance and return closest upcoming stop
+                upcomingStops.sort((a, b) => a.distance - b.distance);
+                return upcomingStops[0];
             }
 
             calculateMovementDirection() {
