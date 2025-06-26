@@ -532,14 +532,16 @@
                     console.log(`GPS movement: ${(distance * 111000).toFixed(0)}m, direction updated`);
                 }
                 
-                // For any GPS update, smoothly transition to new position
-                if (distance > 0) {
-                    // Calculate transition time based on distance and speed
-                    const transitionTime = Math.min(3000, Math.max(1000, distance * 10000)); // 1-3 seconds
-                    const steps = 30;
+                // Smooth transition for any GPS movement
+                if (distance > 0.00001) { // Only animate if there's actual movement
+                    console.log(`GPS movement detected: ${(distance * 1000).toFixed(0)}m`);
+                    
+                    // Use shorter, more frequent steps for smoother animation
+                    const transitionTime = 2000; // 2 seconds for GPS transition
+                    const steps = 60; // More steps for smoother movement
                     let currentStep = 0;
                     
-                    console.log(`Smooth GPS transition: ${steps} steps over ${transitionTime}ms`);
+                    console.log(`Starting smooth transition: ${steps} steps over ${transitionTime}ms`);
                     
                     const smoothTransition = setInterval(() => {
                         currentStep++;
@@ -554,11 +556,8 @@
                         
                         if (currentStep >= steps) {
                             clearInterval(smoothTransition);
-                            this.currentLocationMarker.setLatLng(toLocation);
-                            this.updateBusInfoLabel(toLocation);
+                            console.log('GPS transition complete, starting continuous movement');
                             this.lastBusLocation = toLocation;
-                            
-                            // Start continuous movement simulation
                             this.startContinuousMovement(speed);
                         }
                     }, transitionTime / steps);
@@ -628,7 +627,7 @@
                     return;
                 }
                 
-                const updateInterval = 100; // Update every 100ms for smooth movement
+                const updateInterval = 50; // Update every 50ms for very smooth movement
                 
                 this.isMoving = true;
                 this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), speed, this.busIgnition);
@@ -636,7 +635,11 @@
                 
                 this.movementInterval = setInterval(() => {
                     if (!this.currentLocationMarker || !this.currentDirection || !this.isMoving) {
-                        console.log('Movement stopped - marker, direction or isMoving false');
+                        return;
+                    }
+                    
+                    // Skip movement if at a stop
+                    if (this.isAtStop) {
                         return;
                     }
                     
@@ -670,12 +673,9 @@
                         return;
                     }
                     
-                    // Normal movement if not at stop
-                    if (!this.isAtStop) {
-                        this.currentLocationMarker.setLatLng([newLat, newLng]);
-                        // Update info label without recalculating ETA during simulation
-                        this.updateBusInfoLabelWithSpeed([newLat, newLng], speed, this.busIgnition);
-                    }
+                    // Smooth continuous movement
+                    this.currentLocationMarker.setLatLng([newLat, newLng]);
+                    this.updateBusInfoLabelWithSpeed([newLat, newLng], speed, this.busIgnition);
                     
                 }, updateInterval);
             }
@@ -1162,14 +1162,27 @@
                 
                 console.log(`Current position closest to order ${currentOrder}, looking for next stops in sequence`);
                 
-                // Get all stops with higher order numbers (upcoming in sequence)
+                // Find truly upcoming stops by considering the bus's progress
+                // Only include stops that are both ahead in order AND reasonable distance/direction
+                
                 for (let i = 0; i < this.stopMarkers.length && nextStops.length < 5; i++) {
                     const stopData = this.stopMarkers[i];
+                    const distanceToStop = this.calculateDistance(busLocation, stopData.coordinates);
                     
-                    // Only include stops that have a higher order number (truly upcoming)
-                    if (stopData.order > currentOrder) {
+                    // For a stop to be upcoming, it must:
+                    // 1. Have higher order number than current position
+                    // 2. Be far enough away (not just passed)
+                    // 3. Be in a reasonable distance range
+                    
+                    const isAheadInOrder = stopData.order > currentOrder;
+                    const isNotJustPassed = distanceToStop > 0.2; // More than 200m away
+                    const isReasonableDistance = distanceToStop < 20; // Less than 20km away
+                    
+                    if (isAheadInOrder && isNotJustPassed && isReasonableDistance) {
                         nextStops.push(stopData);
-                        console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order})`);
+                        console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
+                    } else if (isAheadInOrder) {
+                        console.log(`Skipped stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - too close (${distanceToStop.toFixed(2)}km), likely already passed`);
                     }
                 }
                 
