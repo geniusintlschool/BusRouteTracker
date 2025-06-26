@@ -392,23 +392,55 @@
 
                 console.log(`Displaying route with ${routeCoordinates.length} coordinate points`);
 
-                // Create route polyline using the filtered coordinates
-                this.routeLayer = L.polyline(routeCoordinates, {
-                    color: '#ff9800',
-                    weight: 4,
-                    opacity: 0.8
-                }).addTo(this.map);
+                try {
+                    // Attempt to get road-snapped route from OpenRouteService
+                    const snappedRoute = await this.getSnappedRoute(routeCoordinates);
+                    
+                    if (snappedRoute && snappedRoute.length > 0) {
+                        console.log(`Got snapped route with ${snappedRoute.length} points`);
+                        
+                        // Create route polyline using snapped coordinates
+                        this.routeLayer = L.polyline(snappedRoute, {
+                            color: '#ff9800',
+                            weight: 4,
+                            opacity: 0.8
+                        }).addTo(this.map);
 
-                // Add popup to route
-                this.routeLayer.bindPopup(`
-                    <div class="custom-popup">
-                        <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
-                        <p><strong>Date:</strong> June 25, 2025</p>
-                        <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
-                        <p><strong>Route Points:</strong> ${routeCoordinates.length}</p>
-                        <p><em>Filtered GPS route data</em></p>
-                    </div>
-                `);
+                        // Add popup to route
+                        this.routeLayer.bindPopup(`
+                            <div class="custom-popup">
+                                <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
+                                <p><strong>Date:</strong> June 25, 2025</p>
+                                <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
+                                <p><strong>Route Points:</strong> ${routeCoordinates.length}</p>
+                                <p><em>Road-snapped route via OpenRouteService</em></p>
+                            </div>
+                        `);
+                    } else {
+                        throw new Error('No snapped route returned');
+                    }
+                } catch (error) {
+                    console.warn('Road snapping failed, using GPS coordinates:', error.message);
+                    
+                    // Fallback: Create route polyline using the filtered coordinates
+                    this.routeLayer = L.polyline(routeCoordinates, {
+                        color: '#ff9800',
+                        weight: 4,
+                        opacity: 0.8,
+                        dashArray: '10, 5'
+                    }).addTo(this.map);
+
+                    // Add popup to route
+                    this.routeLayer.bindPopup(`
+                        <div class="custom-popup">
+                            <h4>Bus No ${this.BUS_NUMBER} - Historical Route</h4>
+                            <p><strong>Date:</strong> June 25, 2025</p>
+                            <p><strong>Time:</strong> 3:30 PM - 5:30 PM</p>
+                            <p><strong>Route Points:</strong> ${routeCoordinates.length}</p>
+                            <p><em>GPS trail (road snapping unavailable)</em></p>
+                        </div>
+                    `);
+                }
 
                 // Fit map to show the complete route
                 this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
@@ -416,17 +448,24 @@
 
             async getSnappedRoute(coordinates) {
                 try {
-                    // Limit coordinates to avoid API limits
-                    const limitedCoords = coordinates.slice(0, 25); // Limit to 25 points
+                    // Convert [lat, lng] to [lng, lat] for OpenRouteService and limit to key points
+                    const orsCoords = coordinates
+                        .filter((coord, index) => index % 3 === 0 || index === coordinates.length - 1) // Take every 3rd point plus last
+                        .slice(0, 25) // Limit to 25 points for API
+                        .map(coord => [coord[1], coord[0]]); // Convert to [lng, lat]
+                    
+                    console.log(`Attempting to snap ${orsCoords.length} waypoints to roads`);
                     
                     const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${this.ORS_API_KEY}`,
+                            'Authorization': this.ORS_API_KEY,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            coordinates: limitedCoords
+                            coordinates: orsCoords,
+                            radiuses: orsCoords.map(() => 1000), // 1km radius for snapping each point
+                            continue_straight: false
                         })
                     });
 
@@ -437,7 +476,14 @@
                     }
 
                     const data = await response.json();
-                    return data.features[0]?.geometry?.coordinates || [];
+                    const routeGeometry = data.features[0]?.geometry?.coordinates;
+                    
+                    if (routeGeometry && routeGeometry.length > 0) {
+                        // Convert back to [lat, lng] for Leaflet
+                        return routeGeometry.map(coord => [coord[1], coord[0]]);
+                    }
+                    
+                    throw new Error('No route geometry returned');
                 } catch (error) {
                     console.error('Error getting snapped route:', error);
                     return [];
