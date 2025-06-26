@@ -293,6 +293,12 @@
                 
                 // Auto-start direct movement system
                 this.autoStartMovement();
+                
+                // Start continuous movement for immediate visibility
+                setTimeout(() => {
+                    this.startContinuousMovement();
+                    this.forceMovementNow(); // Immediate visible movement
+                }, 1000);
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
@@ -1779,6 +1785,7 @@
             triggerMovementNow() {
                 console.log(`🚀 TRIGGERING MOVEMENT NOW`);
                 this.startDirectMovement(25);
+                this.startContinuousMovement();
             }
 
             // Auto-trigger movement after initialization
@@ -1821,6 +1828,66 @@
                 console.log(`📏 Distance to APPAD 1: ${distance.toFixed(0)}m`);
             }
 
+            // Start continuous movement immediately 
+            startContinuousMovement() {
+                console.log(`🔄 STARTING CONTINUOUS MOVEMENT NOW`);
+                
+                // Clear any existing timers
+                if (this.movementTimer) {
+                    clearInterval(this.movementTimer);
+                }
+                
+                // Start movement immediately
+                this.movementTimer = setInterval(() => {
+                    if (this.currentLocationMarker) {
+                        const currentPos = this.currentLocationMarker.getLatLng();
+                        console.log(`🚌 Current: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                        
+                        // Move toward NEDIYAMCHERI (next stop)
+                        const nediyamcheriCoords = [11.688889, 76.164722]; // NEDIYAMCHERI coordinates
+                        const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], nediyamcheriCoords);
+                        const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, 0.05); // 50 meters - more visible
+                        
+                        // Update position
+                        this.currentLocationMarker.setLatLng(newPos);
+                        console.log(`🚌 Moved to: [${newPos[0].toFixed(6)}, ${newPos[1].toFixed(6)}]`);
+                        
+                        const remainingDistance = this.calculateDistance(newPos, nediyamcheriCoords) * 1000;
+                        console.log(`📏 Distance to NEDIYAMCHERI: ${remainingDistance.toFixed(0)}m`);
+                    }
+                }, 1000); // Every 1 second for more visible movement
+                
+                console.log(`✅ CONTINUOUS MOVEMENT ACTIVE`);
+            }
+
+            // Trigger movement manually for immediate effect
+            forceMovementNow() {
+                console.log(`💥 FORCING MOVEMENT NOW - MANUAL TRIGGER`);
+                
+                if (!this.currentLocationMarker) {
+                    console.log('❌ No bus marker');
+                    return;
+                }
+                
+                const currentPos = this.currentLocationMarker.getLatLng();
+                console.log(`📍 BEFORE: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                
+                // Move 100 meters toward KAPPIKUNNU 2 (next stop)
+                const kappikunnu2Coords = [11.689444, 76.162222]; // KAPPIKUNNU 2 coordinates
+                const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], kappikunnu2Coords);
+                const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, 0.1); // 100 meters
+                
+                // Apply movement immediately
+                this.currentLocationMarker.setLatLng(newPos);
+                this.updateBusInfoLabel(newPos, 25, "ON");
+                
+                console.log(`📍 AFTER: [${newPos[0].toFixed(6)}, ${newPos[1].toFixed(6)}]`);
+                console.log(`🧭 BEARING: ${bearing.toFixed(1)}° toward KAPPIKUNNU 2`);
+                
+                const distance = this.calculateDistance(newPos, kappikunnu2Coords) * 1000;
+                console.log(`📏 REMAINING: ${distance.toFixed(0)}m to KAPPIKUNNU 2`);
+            }
+
             performDirectMovement(speed) {
                 console.log(`🚀 DIRECT MOVEMENT at ${speed} km/h`);
                 
@@ -1848,7 +1915,7 @@
                 const moveMeters = metersPerSecond * 3;
                 const moveKm = moveMeters / 1000;
                 
-                console.log(`🚀 MOVING: ${moveMeters.toFixed(1)}m toward APPAD 1`);
+                console.log(`🚀 MOVING: ${moveMeters.toFixed(1)}m toward ${nextStop['Stop Name']}`);
                 
                 // Calculate bearing and new position
                 const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], targetCoords);
