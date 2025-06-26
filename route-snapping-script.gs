@@ -6,7 +6,8 @@
 
 // OpenRouteService API Configuration
 const ORS_API_KEY = '5b3ce3597851110001cf62486ef5d938c6804787a401d0a56b3236ae';
-const ORS_BASE_URL = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+const ORS_BASE_URL = 'https://api.openrouteservice.org/v2/directions/driving-car';
+const ORS_GEOJSON_URL = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
 
 // Main execution function
 function processAllBusRoutes() {
@@ -284,11 +285,61 @@ function selectKeyPoints(routePoints) {
 function snapSegmentToRoad(segment) {
   const coordinates = segment.map(point => [point.lng, point.lat]);
   
+  // Try GeoJSON endpoint first
+  let success = tryGeoJsonEndpoint(coordinates);
+  if (success) return success;
+  
+  // Fallback to regular endpoint
+  return tryRegularEndpoint(coordinates);
+}
+
+function tryGeoJsonEndpoint(coordinates) {
   const payload = {
     coordinates: coordinates,
-    radiuses: coordinates.map(() => 2000), // 2km search radius
-    continue_straight: false,
-    geometry_simplify: false
+    radiuses: coordinates.map(() => 2000),
+    continue_straight: false
+  };
+  
+  const options = {
+    method: 'POST',
+    headers: {
+      'Authorization': ORS_API_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/geo+json'
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch(ORS_GEOJSON_URL, options);
+    const responseCode = response.getResponseCode();
+    
+    if (responseCode === 200) {
+      const data = JSON.parse(response.getContentText());
+      const routeGeometry = data.features?.[0]?.geometry?.coordinates;
+      
+      if (routeGeometry && routeGeometry.length > 0) {
+        return routeGeometry.map(coord => ({
+          lat: coord[1],
+          lng: coord[0]
+        }));
+      }
+    } else {
+      console.warn(`GeoJSON endpoint failed: ${responseCode}`);
+    }
+  } catch (error) {
+    console.warn('GeoJSON endpoint error:', error);
+  }
+  
+  return null;
+}
+
+function tryRegularEndpoint(coordinates) {
+  const payload = {
+    coordinates: coordinates,
+    radiuses: coordinates.map(() => 2000),
+    continue_straight: false
   };
   
   const options = {
@@ -302,31 +353,69 @@ function snapSegmentToRoad(segment) {
     muteHttpExceptions: true
   };
   
-  const response = UrlFetchApp.fetch(ORS_BASE_URL, options);
-  const responseCode = response.getResponseCode();
-  
-  if (responseCode === 200) {
-    const data = JSON.parse(response.getContentText());
-    const routeGeometry = data.features?.[0]?.geometry?.coordinates;
+  try {
+    const response = UrlFetchApp.fetch(ORS_BASE_URL, options);
+    const responseCode = response.getResponseCode();
     
-    if (routeGeometry && routeGeometry.length > 0) {
-      return routeGeometry.map(coord => ({
-        lat: coord[1],
-        lng: coord[0]
-      }));
+    if (responseCode === 200) {
+      const data = JSON.parse(response.getContentText());
+      const routeGeometry = data.routes?.[0]?.geometry;
+      
+      if (routeGeometry) {
+        // Decode polyline if needed
+        const coordinates = decodePolyline(routeGeometry);
+        return coordinates.map(coord => ({
+          lat: coord[1],
+          lng: coord[0]
+        }));
+      }
+    } else {
+      const errorText = response.getContentText();
+      console.error(`Regular API Error ${responseCode}:`, errorText);
+      
+      if (responseCode === 429) {
+        console.log('Rate limit hit, waiting 5 seconds...');
+        Utilities.sleep(5000);
+      }
     }
-  } else {
-    const errorText = response.getContentText();
-    console.error(`API Error ${responseCode}:`, errorText);
-    
-    // Handle rate limiting
-    if (responseCode === 429) {
-      console.log('Rate limit hit, waiting 5 seconds...');
-      Utilities.sleep(5000);
-    }
+  } catch (error) {
+    console.error('Regular endpoint error:', error);
   }
   
   return null;
+}
+
+// Simple polyline decoder for OpenRouteService
+function decodePolyline(encoded) {
+  const coordinates = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += deltaLat;
+    
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += deltaLng;
+    
+    coordinates.push([lng / 1e5, lat / 1e5]);
+  }
+  
+  return coordinates;
 }
 
 // Store snapped route in SnappedRoutes sheet
