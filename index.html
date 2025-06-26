@@ -548,6 +548,12 @@
                 
                 // Update bus info label with movement status
                 this.updateBusInfoLabelWithSpeed(newLocation, speed, ignition);
+                
+                // Always check for stop arrival after GPS update (with delay for animation completion)
+                setTimeout(() => {
+                    console.log(`🚌 Checking for stop arrival after GPS update at [${newLocation[0].toFixed(6)}, ${newLocation[1].toFixed(6)}]`);
+                    this.checkForStopArrival(newLocation);
+                }, 1000);
 
             }
 
@@ -638,14 +644,18 @@
                             this.lastBusLocation = toLocation;
                             
                             // Check if bus reached any stop during GPS movement
-                            this.checkForStopArrival(toLocation);
                             console.log('GPS animation complete - checking for stop arrival');
+                            setTimeout(() => {
+                                this.checkForStopArrival(toLocation);
+                            }, 500); // Small delay to ensure animation is complete
                         }
                     }, stepTime);
                 } else {
                     // Check if bus reached any stop at current position
-                    this.checkForStopArrival(toLocation);
                     console.log('No GPS movement detected - checking for stop arrival at current position');
+                    setTimeout(() => {
+                        this.checkForStopArrival(toLocation);
+                    }, 500);
                     this.lastBusLocation = toLocation;
                 }
             }
@@ -1036,7 +1046,9 @@
                 }
 
                 const busLatLng = L.latLng(currentPosition[0], currentPosition[1]);
-                const stopRadius = 100; // 100 meters detection radius
+                const stopRadius = 300; // 300 meters detection radius to start movement earlier
+                
+                console.log(`🚌 Checking for stop arrival at [${currentPosition[0].toFixed(6)}, ${currentPosition[1].toFixed(6)}]`);
                 
                 // Find nearby stop
                 for (let stop of this.busStops) {
@@ -1050,25 +1062,100 @@
                     
                     if (distance <= stopRadius && this.busIgnition === 'ON') {
                         const stopName = stop['Stop Name'];
-                        console.log(`🚌 Bus arrived at ${stopName} - starting 10-second stop`);
+                        console.log(`🚌 Bus within ${distance.toFixed(0)}m of ${stopName} - starting movement sequence`);
                         
                         // Stop any existing movement
                         this.stopContinuousMovement();
                         
-                        // Update bus position to exact stop location
-                        this.currentLocationMarker.setLatLng([stopLat, stopLng]);
-                        this.updateBusInfoLabelWithSpeed([stopLat, stopLng], 0, this.busIgnition, `At ${stopName}`);
-                        
-                        // Wait 10 seconds, then move to next stop
-                        this.stopTimer = setTimeout(() => {
-                            console.log(`🚌 10-second stop completed at ${stopName} - moving to next stop`);
-                            this.moveToNextStop(stop);
-                        }, 10000);
+                        // If very close (within 50m), treat as arrival
+                        if (distance <= 50) {
+                            console.log(`🚌 Bus arrived at ${stopName} - starting 10-second stop`);
+                            this.currentLocationMarker.setLatLng([stopLat, stopLng]);
+                            this.updateBusInfoLabelWithSpeed([stopLat, stopLng], 0, this.busIgnition, `At ${stopName}`);
+                            
+                            // Wait 10 seconds, then move to next stop
+                            this.stopTimer = setTimeout(() => {
+                                console.log(`🚌 10-second stop completed at ${stopName} - moving to next stop`);
+                                this.moveToNextStop(stop);
+                            }, 10000);
+                        } else {
+                            // Start moving towards this stop
+                            console.log(`🚌 Starting movement towards ${stopName}`);
+                            this.moveTowardsStop(stop, currentPosition);
+                        }
                         
                         return true; // Stop found and processed
                     }
                 }
+                
+                // If no nearby stop but ignition is ON, check if we should move to next stop in sequence
+                if (this.busIgnition === 'ON' && !this.isMoving && !this.moveToNextStopInterval) {
+                    this.startMovementToNextStop(currentPosition);
+                }
+                
                 return false; // No nearby stop
+            }
+
+            startMovementToNextStop(currentPosition) {
+                // Find the closest upcoming stop to move towards
+                const upcomingStops = this.calculateETA();
+                if (upcomingStops.length > 0) {
+                    const nextStop = upcomingStops[0];
+                    console.log(`🚌 No nearby stops - starting movement towards next stop: ${nextStop.stop['Stop Name']}`);
+                    this.moveTowardsStop(nextStop.stop, currentPosition);
+                }
+            }
+
+            moveTowardsStop(targetStop, startPosition) {
+                const targetLat = this.convertDMSToDecimal(targetStop['Latitude']);
+                const targetLng = this.convertDMSToDecimal(targetStop['Longitude']);
+                
+                if (isNaN(targetLat) || isNaN(targetLng)) {
+                    console.log('🚌 Invalid coordinates for target stop');
+                    return;
+                }
+                
+                const targetStopName = targetStop['Stop Name'];
+                console.log(`🚌 Moving towards ${targetStopName} at [${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}]`);
+                
+                // Calculate movement parameters
+                const distance = this.calculateDistance(startPosition, [targetLat, targetLng]);
+                const speed = Math.random() * 10 + 5; // Random speed between 5-15 km/h
+                const timeToReach = (distance / speed) * 3600; // Time in seconds
+                
+                console.log(`🚌 Distance: ${(distance * 1000).toFixed(0)}m, Speed: ${speed.toFixed(1)} km/h, ETA: ${timeToReach.toFixed(0)}s`);
+                
+                // Start smooth movement
+                this.isMoving = true;
+                this.isAtStop = false;
+                
+                const steps = Math.max(60, timeToReach * 2); // More steps for smoother movement
+                const stepTime = (timeToReach * 1000) / steps; // Time per step in ms
+                const latStep = (targetLat - startPosition[0]) / steps;
+                const lngStep = (targetLng - startPosition[1]) / steps;
+                
+                let currentStep = 0;
+                
+                this.moveToNextStopInterval = setInterval(() => {
+                    currentStep++;
+                    const progress = currentStep / steps;
+                    const easedProgress = this.easeInOutQuad(progress);
+                    
+                    const newLat = startPosition[0] + (latStep * steps * easedProgress);
+                    const newLng = startPosition[1] + (lngStep * steps * easedProgress);
+                    
+                    this.currentLocationMarker.setLatLng([newLat, newLng]);
+                    this.updateBusInfoLabelWithSpeed([newLat, newLng], speed, this.busIgnition, `Moving to ${targetStopName}`);
+                    
+                    if (currentStep >= steps) {
+                        clearInterval(this.moveToNextStopInterval);
+                        this.moveToNextStopInterval = null;
+                        console.log(`🚌 Reached vicinity of ${targetStopName}`);
+                        
+                        // Check if we've reached the stop for the 10-second pause
+                        this.checkForStopArrival([newLat, newLng]);
+                    }
+                }, stepTime);
             }
 
             moveToNextStop(currentStop) {
