@@ -532,16 +532,22 @@
                     console.log(`GPS movement: ${(distance * 111000).toFixed(0)}m, direction updated`);
                 }
                 
-                // Smooth transition for any GPS movement
-                if (distance > 0.00001) { // Only animate if there's actual movement
-                    console.log(`GPS movement detected: ${(distance * 1000).toFixed(0)}m`);
+                // Always animate movement smoothly, even for small movements
+                if (distance > 0.000001) { // Animate even tiny movements
+                    console.log(`GPS movement detected: ${(distance * 111000).toFixed(0)}m - starting smooth animation`);
                     
-                    // Use shorter, more frequent steps for smoother animation
-                    const transitionTime = 2000; // 2 seconds for GPS transition
-                    const steps = 60; // More steps for smoother movement
+                    // Stop any existing continuous movement
+                    this.stopContinuousMovement();
+                    
+                    // Smooth animation parameters - scale time based on distance
+                    const minTime = 1000; // Minimum 1 second
+                    const maxTime = 4000; // Maximum 4 seconds
+                    const transitionTime = Math.min(maxTime, Math.max(minTime, distance * 50000)); // Scale with distance
+                    const steps = Math.min(120, Math.max(30, distance * 100000)); // Scale steps with distance
+                    const stepTime = transitionTime / steps;
                     let currentStep = 0;
                     
-                    console.log(`Starting smooth transition: ${steps} steps over ${transitionTime}ms`);
+                    console.log(`Animating ${steps} steps over ${transitionTime}ms (${stepTime}ms per step)`);
                     
                     const smoothTransition = setInterval(() => {
                         currentStep++;
@@ -556,11 +562,19 @@
                         
                         if (currentStep >= steps) {
                             clearInterval(smoothTransition);
-                            console.log('GPS transition complete, starting continuous movement');
+                            console.log('GPS animation complete');
                             this.lastBusLocation = toLocation;
-                            this.startContinuousMovement(speed);
+                            
+                            // Only start continuous movement if bus has speed
+                            if (speed > 0) {
+                                setTimeout(() => {
+                                    this.startContinuousMovement(speed);
+                                }, 500); // Small delay before continuous movement
+                            } else {
+                                console.log('Bus stopped (speed=0), no continuous movement');
+                            }
                         }
-                    }, transitionTime / steps);
+                    }, stepTime);
                 } else {
                     // No GPS movement - use existing position and direction
                     console.log(`No GPS movement - continuing with speed: ${speed} km/h`);
@@ -1162,33 +1176,41 @@
                 
                 console.log(`Current position closest to order ${currentOrder}, looking for next stops in sequence`);
                 
-                // For U-turn routes, implement smarter logic based on actual route progression
-                // Consider both distance and direction to determine truly upcoming stops
+                // Intelligent ETA system for U-turn routes
+                // Only show stops that are genuinely ahead in the journey
                 
+                console.log(`Current bus position: [${busLocation[0].toFixed(6)}, ${busLocation[1].toFixed(6)}]`);
+                
+                // Filter stops based on realistic travel logic
                 for (let i = 0; i < this.stopMarkers.length && nextStops.length < 5; i++) {
                     const stopData = this.stopMarkers[i];
                     const distanceToStop = this.calculateDistance(busLocation, stopData.coordinates);
                     
-                    // Enhanced logic for U-turn routes:
-                    // 1. Must have higher order number than current position
-                    // 2. For close stops (<1km), they're likely already passed - skip them
-                    // 3. For medium distance stops (1-3km), they could be next upcoming stops
-                    // 4. For distant stops (>3km), they're likely on return journey - skip them
-                    
-                    const isAheadInOrder = stopData.order > currentOrder;
-                    const isVeryClose = distanceToStop < 1.0; // Less than 1km - likely already passed
-                    const isReasonableNext = distanceToStop >= 1.0 && distanceToStop <= 3.0; // 1-3km range
-                    const isTooDistant = distanceToStop > 3.0; // More than 3km - return journey
-                    
-                    if (isAheadInOrder && isReasonableNext) {
-                        nextStops.push(stopData);
-                        console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
-                    } else if (isAheadInOrder && isVeryClose) {
-                        console.log(`Skipped close stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, likely already passed`);
-                    } else if (isAheadInOrder && isTooDistant) {
-                        console.log(`Skipped distant stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, likely return journey`);
+                    // Skip stops that are clearly already passed or too close
+                    if (distanceToStop < 1.2) { // Less than 1.2km - likely in same area or passed
+                        console.log(`Skipped nearby stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away (too close, likely passed)`);
+                        continue;
                     }
+                    
+                    // Skip stops that are too far (return journey)
+                    if (distanceToStop > 6.0) {
+                        console.log(`Skipped distant stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away (too far, return journey)`);
+                        continue;
+                    }
+                    
+                    // Must have higher order number for upcoming stops
+                    if (stopData.order <= currentOrder) {
+                        console.log(`Skipped past stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - lower order than current position`);
+                        continue;
+                    }
+                    
+                    // Add genuinely upcoming stops
+                    nextStops.push(stopData);
+                    console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
                 }
+                
+                // Sort by order to maintain route sequence
+                nextStops.sort((a, b) => a.order - b.order);
                 
                 // Sort by order to maintain proper sequence
                 nextStops.sort((a, b) => a.order - b.order);
