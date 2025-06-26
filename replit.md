@@ -13,12 +13,12 @@ The application follows an enhanced client-side architecture:
 - **Route Processing**: OpenRouteService API integration for road-snapped route visualization
 - **Data Sources**: Google Sheets integration via OpenSheet API for real-time bus data
 - **Server**: Python's built-in HTTP server for local development
-- **Real-time Updates**: 15-second refresh cycle for live bus location with smooth animations
+- **Real-time Updates**: 60-second refresh cycle for live bus location with continuous movement simulation
 
 ## Key Features
 
 ### Real-time Bus Tracking
-- **Live Location Updates**: 15-second automatic refresh of bus position
+- **Live Location Updates**: 60-second automatic refresh of bus position
 - **Smooth Animation**: Animated bus movement between GPS coordinates
 - **Speed-based Animation**: Movement speed adjusts based on actual bus velocity
 - **Preserve User Zoom**: Map maintains user's preferred zoom level during updates
@@ -104,7 +104,7 @@ June 26, 2025:
 - ✓ Complete Bus No 4 route visualization with 90 GPS coordinates
 - ✓ Road-snapped routes using OpenRouteService API with 5-segment processing
 - ✓ All 39 bus stops properly ordered and displayed with converted coordinates
-- ✓ 15-second auto-refresh cycle preserving user zoom level
+- ✓ 60-second auto-refresh cycle with continuous movement simulation between updates
 - ✓ Smooth bus movement animations based on actual speed
 - ✓ Direction arrows showing route flow
 - ✓ ETA calculations for next 5 stops with 5-minute alerts
@@ -113,7 +113,7 @@ June 26, 2025:
 - ✓ Fixed unhandled promise rejections causing infinite loading on GitHub Pages
 - ✓ Added global error handling for network failures and API timeouts
 - ✓ App successfully loads from GitHub Pages deployment
-- ✓ Fixed 15-second auto-refresh mechanism for real-time location updates
+- ✓ Enhanced to 60-second auto-refresh with continuous movement simulation
 - ✓ Confirmed automatic data fetching from BusLocations sheet working
 - ✓ Fixed loading overlay issues by disabling problematic route snapping
 - ✓ App loads reliably with GPS trail route visualization
@@ -126,4 +126,6 @@ June 26, 2025:
 - ✓ Enhanced smooth bus movement system with accurate speed calculations
 - ✓ Improved animation detection for GPS coordinate changes
 - ✓ Added continuous movement simulation between GPS updates
+- ✓ Updated to 60-second refresh intervals with continuous movement during intervals
+- ✓ ETA calculations now only occur during GPS refresh (not during movement simulation)
 - ✓ Complete working bus tracker ready for production deployment
