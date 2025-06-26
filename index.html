@@ -1116,12 +1116,13 @@
             }
 
             calculateETA() {
-                if (!this.lastBusLocation || this.stopMarkers.length === 0 || this.lastSpeed <= 0) {
+                if (!this.lastBusLocation || this.stopMarkers.length === 0) {
                     return [];
                 }
                 
                 const busLocation = this.lastBusLocation;
-                const speed = Math.max(this.lastSpeed, 5); // Minimum 5 km/h for calculation
+                // Use realistic bus speed: current speed if moving, otherwise assume 25 km/h average
+                const speed = (this.lastSpeed && this.lastSpeed > 0) ? this.lastSpeed : 25;
                 
                 // Find next stops based on order sequence, not route position
                 const nextStops = this.findNextStopsInOrder(busLocation);
@@ -1135,7 +1136,7 @@
                     const timeInHours = distance / speed;
                     const timeInMinutes = Math.round(timeInHours * 60);
                     
-                    console.log(`ETA to ${stopData.stop['Stop Name']} (order ${stopData.order}): ${timeInMinutes} mins (${distance.toFixed(2)} km)`);
+                    console.log(`ETA to ${stopData.stop['Stop Name']} (order ${stopData.order}): ${timeInMinutes} mins (${distance.toFixed(2)} km) at ${speed} km/h`);
                     
                     etas.push({
                         stop: stopData.stop,
