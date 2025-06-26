@@ -241,26 +241,45 @@
 
             async updateBusLocation() {
                 try {
+                    console.log('Updating bus location...');
                     // Only fetch current location data
                     const busLocations = await this.fetchData(`${this.SHEETS_BASE_URL}/BusLocations`);
                     const bus4Locations = busLocations.filter(bus => parseInt(bus['Bus Number']) === this.BUS_NUMBER);
                     
+                    console.log(`Update: Found ${bus4Locations.length} locations for Bus No 4`);
+                    
                     if (bus4Locations.length > 0) {
+                        const currentLocation = bus4Locations[bus4Locations.length - 1];
+                        console.log('Update: Latest location:', {
+                            lat: currentLocation['Latitude'],
+                            lng: currentLocation['Longitude'],
+                            time: currentLocation['Time'],
+                            speed: currentLocation['Speed'],
+                            ignition: currentLocation['Ignition']
+                        });
+                        
                         await this.displayCurrentLocation(bus4Locations, false);
                         this.updateLastUpdateTime();
                         this.checkETAAlerts();
+                        console.log('Update: Location updated successfully');
+                    } else {
+                        console.warn('Update: No Bus No 4 locations found');
                     }
                 } catch (error) {
-                    console.warn('Failed to update bus location:', error);
-                    // Don't show error to user for routine updates, just log it
+                    console.error('Failed to update bus location:', error);
+                    // Don't show error to user for routine updates, but log details
                 }
             }
 
             startLocationUpdates() {
                 // Update bus location every 15 seconds
+                console.log('Starting 15-second location update timer');
                 setInterval(() => {
                     if (!this.isInitialLoad) {
+                        console.log('Timer triggered: calling updateBusLocation()');
                         this.updateBusLocation();
+                    } else {
+                        console.log('Timer triggered: skipping update (initial load in progress)');
                     }
                 }, 15000);
             }
