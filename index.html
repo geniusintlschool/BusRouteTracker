@@ -252,8 +252,10 @@
                 setTimeout(() => {
                     console.log('Force starting bus movement...');
                     if (this.currentLocationMarker) {
-                        console.log('Bus marker exists, starting movement at 20 km/h');
-                        this.forceStartMovement(20);
+                        console.log('Bus marker exists, starting movement at 10 km/h');
+                        // Set initial state - not at stop
+                        this.isAtStop = false;
+                        this.forceStartMovement(10);
                     } else {
                         console.log('No bus marker found');
                     }
@@ -785,7 +787,8 @@
                 console.log(`Force starting route-following movement at ${speed} km/h`);
                 
                 if (!this.snappedRoute || this.snappedRoute.length === 0) {
-                    console.log('No route available - cannot start proper movement');
+                    console.log('Snapped route not available, starting basic movement along route coordinates');
+                    this.startBasicRouteMovement(speed);
                     return;
                 }
                 
@@ -822,22 +825,147 @@
                         return;
                     }
                     
+                    // Skip movement if currently paused at a stop
+                    if (this.isAtStop) {
+                        return;
+                    }
+                    
                     const nextPoint = this.snappedRoute[this.currentRouteIndex + 1];
                     const currentBusPos = this.currentLocationMarker.getLatLng();
+                    
+                    // Check if bus is near any bus stop (within 50 meters)
+                    const nearbyStop = this.checkNearbyBusStop([currentBusPos.lat, currentBusPos.lng]);
+                    
+                    if (nearbyStop && !this.isAtStop) {
+                        // Bus reached a stop - pause for 10 seconds
+                        console.log(`Bus reached Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']} - pausing for 10 seconds`);
+                        this.isAtStop = true;
+                        
+                        // Move to exact stop location
+                        this.currentLocationMarker.setLatLng(nearbyStop.coordinates);
+                        this.updateBusInfoLabelWithSpeed(nearbyStop.coordinates, 0, this.busIgnition, `At Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']}`);
+                        
+                        // Resume movement after 10 seconds at 10 km/h
+                        setTimeout(() => {
+                            console.log(`Resuming from Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']} at 10 km/h`);
+                            this.isAtStop = false;
+                            // Change speed to 10 km/h after stop
+                            const newMetersPerSecond = (10 * 1000) / 3600;
+                            const newMetersPerUpdate = newMetersPerSecond * (updateInterval / 1000);
+                            this.currentMovementSpeed = 10;
+                            this.metersPerUpdate = newMetersPerUpdate;
+                        }, 10000);
+                        
+                        return;
+                    }
                     
                     // Calculate distance to next route point
                     const distanceToNext = this.calculateDistance([currentBusPos.lat, currentBusPos.lng], [nextPoint[0], nextPoint[1]]) * 1000;
                     
+                    // Use current movement speed (10 km/h after stops, original speed initially)
+                    const currentMetersPerUpdate = this.metersPerUpdate || metersPerUpdate;
+                    const currentSpeed = this.currentMovementSpeed || speed;
+                    
                     // If close to next point, advance to it
-                    if (distanceToNext < metersPerUpdate * 2) {
+                    if (distanceToNext < currentMetersPerUpdate * 2) {
                         this.currentRouteIndex++;
                         this.currentLocationMarker.setLatLng([nextPoint[0], nextPoint[1]]);
                         console.log(`Advanced to route point ${this.currentRouteIndex}`);
                     } else {
                         // Move towards next point
                         const bearing = this.calculateBearing([currentBusPos.lat, currentBusPos.lng], [nextPoint[0], nextPoint[1]]);
-                        const newPosition = this.movePointByDistance([currentBusPos.lat, currentBusPos.lng], bearing, metersPerUpdate / 1000);
+                        const newPosition = this.movePointByDistance([currentBusPos.lat, currentBusPos.lng], bearing, currentMetersPerUpdate / 1000);
                         this.currentLocationMarker.setLatLng(newPosition);
+                    }
+                    
+                    this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), currentSpeed, this.busIgnition);
+                    
+                }, updateInterval);
+            }
+
+            startBasicRouteMovement(speed) {
+                console.log(`Starting basic route movement at ${speed} km/h`);
+                
+                // Use the historical route coordinates
+                const routeCoordinates = [
+                    [11.707203, 76.178753], [11.707203, 76.178753], [11.707043, 76.178674], [11.703089, 76.176372],
+                    [11.70215, 76.175898], [11.699329, 76.174175], [11.698983, 76.173874], [11.69897, 76.173627],
+                    [11.69897, 76.173627], [11.693091, 76.175683], [11.693091, 76.175683], [11.693091, 76.175683],
+                    [11.692489, 76.171257], [11.692894, 76.169505], [11.690033, 76.163223], [11.690155, 76.162754],
+                    [11.690275, 76.162408], [11.69037, 76.161508], [11.690206, 76.160369], [11.690047, 76.163146]
+                ];
+                
+                // Clear any existing movement
+                if (this.movementInterval) {
+                    clearInterval(this.movementInterval);
+                }
+                
+                this.isMoving = true;
+                
+                // Find current position on route
+                const currentPos = this.currentLocationMarker.getLatLng();
+                let closestIndex = 0;
+                let minDistance = Infinity;
+                
+                for (let i = 0; i < routeCoordinates.length; i++) {
+                    const routePoint = routeCoordinates[i];
+                    const distance = this.calculateDistance([currentPos.lat, currentPos.lng], [routePoint[0], routePoint[1]]);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestIndex = i;
+                    }
+                }
+                
+                this.currentRouteIndex = closestIndex;
+                console.log(`Starting from route point ${closestIndex}/${routeCoordinates.length}`);
+                
+                const updateInterval = 1000; // Update every 1 second
+                const metersPerSecond = (speed * 1000) / 3600;
+                const metersPerUpdate = metersPerSecond * (updateInterval / 1000);
+                
+                this.movementInterval = setInterval(() => {
+                    if (!this.isMoving || this.isAtStop || this.currentRouteIndex >= routeCoordinates.length - 1) {
+                        return;
+                    }
+                    
+                    const currentBusPos = this.currentLocationMarker.getLatLng();
+                    
+                    // Check if bus is near any bus stop (within 100 meters)
+                    const nearbyStop = this.checkNearbyBusStop([currentBusPos.lat, currentBusPos.lng]);
+                    
+                    if (nearbyStop && !this.isAtStop) {
+                        // Bus reached a stop - pause for 10 seconds
+                        console.log(`Bus reached Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']} - pausing for 10 seconds`);
+                        this.isAtStop = true;
+                        
+                        this.currentLocationMarker.setLatLng(nearbyStop.coordinates);
+                        this.updateBusInfoLabelWithSpeed(nearbyStop.coordinates, 0, this.busIgnition, `At Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']}`);
+                        
+                        // Resume movement after 10 seconds
+                        setTimeout(() => {
+                            console.log(`Resuming from Stop ${nearbyStop.order}: ${nearbyStop.stop['Stop Name']} at 10 km/h`);
+                            this.isAtStop = false;
+                        }, 10000);
+                        
+                        return;
+                    }
+                    
+                    // Move to next route point
+                    const nextPoint = routeCoordinates[this.currentRouteIndex + 1];
+                    if (nextPoint) {
+                        const distanceToNext = this.calculateDistance([currentBusPos.lat, currentBusPos.lng], [nextPoint[0], nextPoint[1]]) * 1000;
+                        
+                        if (distanceToNext < metersPerUpdate * 2) {
+                            // Close enough, move to next point
+                            this.currentRouteIndex++;
+                            this.currentLocationMarker.setLatLng([nextPoint[0], nextPoint[1]]);
+                            console.log(`Advanced to route point ${this.currentRouteIndex}`);
+                        } else {
+                            // Move towards next point
+                            const bearing = this.calculateBearing([currentBusPos.lat, currentBusPos.lng], [nextPoint[0], nextPoint[1]]);
+                            const newPosition = this.movePointByDistance([currentBusPos.lat, currentBusPos.lng], bearing, metersPerUpdate / 1000);
+                            this.currentLocationMarker.setLatLng(newPosition);
+                        }
                     }
                     
                     this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), speed, this.busIgnition);
