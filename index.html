@@ -291,18 +291,8 @@
                     this.isInitialLoad = false;
                     console.log('Initial load completed successfully, updates enabled');
                 
-                // Force bus movement to start immediately after a short delay
-                setTimeout(() => {
-                    console.log('Force starting bus movement...');
-                    if (this.currentLocationMarker) {
-                        console.log('Bus marker exists, starting movement at 10 km/h');
-                        // Set initial state - not at stop
-                        this.isAtStop = false;
-                        this.forceStartMovement(10);
-                    } else {
-                        console.log('No bus marker found');
-                    }
-                }, 3000);
+                // Auto-start direct movement system
+                this.autoStartMovement();
                     
                 } catch (error) {
                     console.error('Error loading bus data:', error);
@@ -1769,11 +1759,7 @@
                     clearInterval(this.directTimer);
                 }
                 
-                if (this.busIgnition !== "ON") {
-                    console.log('Bus ignition OFF - no direct movement');
-                    return;
-                }
-                
+                // Force movement regardless of ignition for testing
                 const movementSpeed = speed > 0 ? speed : 30;
                 console.log(`⚡ DIRECT: ${movementSpeed} km/h with 3-second intervals`);
                 
@@ -1789,6 +1775,52 @@
                 console.log(`✅ DIRECT MOVEMENT ACTIVE`);
             }
 
+            // Force immediate movement trigger
+            triggerMovementNow() {
+                console.log(`🚀 TRIGGERING MOVEMENT NOW`);
+                this.startDirectMovement(25);
+            }
+
+            // Auto-trigger movement after initialization
+            autoStartMovement() {
+                console.log(`🎬 AUTO-STARTING MOVEMENT`);
+                setTimeout(() => {
+                    this.triggerMovementNow();
+                }, 2000);
+            }
+
+            // Simple immediate movement function
+            moveToNextStop() {
+                console.log(`🚌 IMMEDIATE MOVEMENT TO NEXT STOP`);
+                
+                if (!this.currentLocationMarker) {
+                    console.log('❌ No bus marker found');
+                    return;
+                }
+                
+                // Get current position
+                const currentPos = this.currentLocationMarker.getLatLng();
+                console.log(`📍 Current: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
+                
+                // Move directly toward APPAD 1 coordinates
+                const appad1Coords = [11.692786, 76.175953]; // APPAD 1 coordinates
+                console.log(`🎯 Moving to APPAD 1: [${appad1Coords[0]}, ${appad1Coords[1]}]`);
+                
+                // Move 20 meters toward APPAD 1
+                const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], appad1Coords);
+                const newPos = this.movePointByDistance([currentPos.lat, currentPos.lng], bearing, 0.02); // 20 meters
+                
+                // Update bus position
+                this.currentLocationMarker.setLatLng(newPos);
+                this.updateBusInfoLabel(newPos, 25, "ON");
+                
+                console.log(`🚌 Moved to: [${newPos[0].toFixed(6)}, ${newPos[1].toFixed(6)}]`);
+                console.log(`🧭 Bearing: ${bearing.toFixed(1)}°`);
+                
+                const distance = this.calculateDistance(newPos, appad1Coords) * 1000;
+                console.log(`📏 Distance to APPAD 1: ${distance.toFixed(0)}m`);
+            }
+
             performDirectMovement(speed) {
                 console.log(`🚀 DIRECT MOVEMENT at ${speed} km/h`);
                 
@@ -1800,22 +1832,23 @@
                 const currentPos = this.currentLocationMarker.getLatLng();
                 console.log(`📍 FROM: [${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}]`);
                 
-                // Get APPAD SCHOOL ROAD coordinates directly
-                const schoolRoadStop = this.busStops.find(stop => stop['Stop Name'] === 'APPAD SCHOOL ROAD');
-                if (!schoolRoadStop) {
-                    console.log('❌ APPAD SCHOOL ROAD not found');
+                // Get next stop in sequence from upcoming stops
+                const upcomingStops = this.getUpcomingStops([currentPos.lat, currentPos.lng]);
+                if (!upcomingStops || upcomingStops.length === 0) {
+                    console.log('❌ No upcoming stops found');
                     return;
                 }
                 
-                const targetCoords = [schoolRoadStop.lat, schoolRoadStop.lng];
-                console.log(`🎯 TO: APPAD SCHOOL ROAD at [${targetCoords[0].toFixed(6)}, ${targetCoords[1].toFixed(6)}]`);
+                const nextStop = upcomingStops[0];
+                const targetCoords = [nextStop.lat, nextStop.lng];
+                console.log(`🎯 TO: ${nextStop['Stop Name']} at [${targetCoords[0].toFixed(6)}, ${targetCoords[1].toFixed(6)}]`);
                 
                 // Calculate movement distance (3 seconds worth)
                 const metersPerSecond = (speed * 1000) / 3600;
                 const moveMeters = metersPerSecond * 3;
                 const moveKm = moveMeters / 1000;
                 
-                console.log(`🚀 MOVING: ${moveMeters.toFixed(1)}m toward APPAD SCHOOL ROAD`);
+                console.log(`🚀 MOVING: ${moveMeters.toFixed(1)}m toward APPAD 1`);
                 
                 // Calculate bearing and new position
                 const bearing = this.calculateBearing([currentPos.lat, currentPos.lng], targetCoords);
