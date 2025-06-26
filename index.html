@@ -497,35 +497,9 @@
                     iconAnchor: [17, 17]
                 });
 
-                // Snap GPS coordinates to actual roads using OpenRouteService API
-                let newLocation = [lat, lng];
-                
-                try {
-                    const snapUrl = `https://api.openrouteservice.org/v2/snap/driving-car?api_key=5b3ce3597851110001cf62486ef5d938c6804787a401d0a56b3236ae&locations=${lng},${lat}&radius=1000`;
-                    
-                    const snapResponse = await fetch(snapUrl);
-                    if (snapResponse.ok) {
-                        const snapData = await snapResponse.json();
-                        if (snapData.locations && snapData.locations.length > 0) {
-                            const snappedCoord = snapData.locations[0];
-                            const snappedLocation = [snappedCoord.location[1], snappedCoord.location[0]]; // Convert from [lng, lat] to [lat, lng]
-                            const snapDistance = this.calculateDistance([lat, lng], snappedLocation) * 1000; // in meters
-                            
-                            if (snapDistance < 500) { // Only use snapped location if within 500m
-                                newLocation = snappedLocation;
-                                console.log(`GPS: [${lat.toFixed(6)}, ${lng.toFixed(6)}] snapped to road: [${newLocation[0].toFixed(6)}, ${newLocation[1].toFixed(6)}] (${snapDistance.toFixed(0)}m away)`);
-                            } else {
-                                console.log(`GPS snapping distance too far (${snapDistance.toFixed(0)}m), using original GPS coordinates`);
-                            }
-                        } else {
-                            console.log('No road snap found, using original GPS coordinates');
-                        }
-                    } else {
-                        console.log('Road snapping failed, using original GPS coordinates');
-                    }
-                } catch (error) {
-                    console.log('Road snapping error, using original GPS coordinates:', error);
-                }
+                // Use original GPS coordinates without snapping for now
+                const newLocation = [lat, lng];
+                console.log(`Using original GPS coordinates: [${lat.toFixed(6)}, ${lng.toFixed(6)}]`);
 
                 if (this.currentLocationMarker) {
                     // Smooth transition to new location
