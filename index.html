@@ -1240,6 +1240,11 @@
                 }, 3000); // Move every 3 seconds
                 
                 console.log(`✅ Continuous movement timer started - bus will move every 3 seconds`);
+                
+                // Debug: Log timer status
+                setTimeout(() => {
+                    console.log(`🔍 Movement timer check: ${this.continuousTimer ? 'ACTIVE' : 'INACTIVE'}`);
+                }, 1000);
             }
 
             calculateMovementDirection() {
