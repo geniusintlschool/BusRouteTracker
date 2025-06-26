@@ -444,9 +444,12 @@
                 if (this.currentLocationMarker) {
                     // Smooth transition to new location
                     if (this.lastBusLocation) {
+                        console.log(`Animating bus from [${this.lastBusLocation[0].toFixed(6)}, ${this.lastBusLocation[1].toFixed(6)}] to [${newLocation[0].toFixed(6)}, ${newLocation[1].toFixed(6)}] at ${speed} km/h`);
                         this.animateBusMovement(this.lastBusLocation, newLocation, speed);
                     } else {
+                        console.log('Initial bus position set');
                         this.currentLocationMarker.setLatLng(newLocation);
+                        this.startContinuousMovement(speed);
                     }
                     
                     // Update popup content
@@ -509,44 +512,53 @@
             }
 
             animateBusMovement(fromLocation, toLocation, speed) {
+                // Stop any existing movement to prevent conflicts
+                this.stopContinuousMovement();
+                
                 // Calculate direction for continuous movement
                 const latDiff = toLocation[0] - fromLocation[0];
                 const lngDiff = toLocation[1] - fromLocation[1];
                 const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
                 
-                if (distance > 0) {
+                if (distance > 0.0001) { // Only animate significant movements
                     this.currentDirection = {
                         lat: latDiff / distance,
                         lng: lngDiff / distance
                     };
+                    
+                    // Smooth transition to new position
+                    const steps = Math.max(15, Math.min(30, Math.floor(distance * 50000))); // Scale with distance
+                    const stepTime = 2000; // 2 seconds for transition
+                    let currentStep = 0;
+                    
+                    const smoothTransition = setInterval(() => {
+                        currentStep++;
+                        const progress = currentStep / steps;
+                        const easedProgress = this.easeInOutQuad(progress);
+                        
+                        const currentLat = fromLocation[0] + (latDiff * easedProgress);
+                        const currentLng = fromLocation[1] + (lngDiff * easedProgress);
+                        
+                        this.currentLocationMarker.setLatLng([currentLat, currentLng]);
+                        this.updateBusInfoLabel([currentLat, currentLng]);
+                        
+                        if (currentStep >= steps) {
+                            clearInterval(smoothTransition);
+                            this.currentLocationMarker.setLatLng(toLocation);
+                            this.updateBusInfoLabel(toLocation);
+                            this.lastBusLocation = toLocation;
+                            
+                            // Start continuous movement after smooth transition
+                            this.startContinuousMovement(speed);
+                        }
+                    }, stepTime / steps);
+                } else {
+                    // Small movement, just update position and start continuous movement
+                    this.currentLocationMarker.setLatLng(toLocation);
+                    this.updateBusInfoLabel(toLocation);
+                    this.lastBusLocation = toLocation;
+                    this.startContinuousMovement(speed);
                 }
-                
-                // Start continuous movement based on speed
-                this.startContinuousMovement(speed);
-                
-                // Also do immediate smooth transition to new position
-                const steps = 20;
-                const stepTime = 1000; // 1 second transition
-                let currentStep = 0;
-                
-                const quickTransition = setInterval(() => {
-                    currentStep++;
-                    const progress = currentStep / steps;
-                    const easedProgress = this.easeInOutQuad(progress);
-                    
-                    const currentLat = fromLocation[0] + (latDiff * easedProgress);
-                    const currentLng = fromLocation[1] + (lngDiff * easedProgress);
-                    
-                    this.currentLocationMarker.setLatLng([currentLat, currentLng]);
-                    this.updateBusInfoLabel([currentLat, currentLng]);
-                    
-                    if (currentStep >= steps) {
-                        clearInterval(quickTransition);
-                        this.currentLocationMarker.setLatLng(toLocation);
-                        this.updateBusInfoLabel(toLocation);
-                        this.lastBusLocation = toLocation;
-                    }
-                }, stepTime / steps);
             }
             
             startContinuousMovement(speed) {
@@ -556,6 +568,7 @@
                 if (speed === 0) {
                     // Bus is stopped - pause for 10 seconds
                     this.isMoving = false;
+                    this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), speed, this.busIgnition);
                     console.log('Bus stopped - pausing for 10 seconds');
                     
                     this.stopTimer = setTimeout(() => {
@@ -565,12 +578,18 @@
                     return;
                 }
                 
-                // Convert km/h to degrees per second (rough approximation)
-                // 1 km/h ≈ 0.00000277 degrees per second at equator
-                const degreesPerSecond = (speed * 0.00000277) / 3.6;
-                const updateInterval = 100; // Update every 100ms for smooth movement
+                // More accurate speed conversion: km/h to degrees per second
+                // 1 degree latitude ≈ 111.32 km, 1 degree longitude ≈ 111.32 km * cos(latitude)
+                const avgLat = this.currentLocationMarker ? this.currentLocationMarker.getLatLng().lat : 11.7;
+                const latDegreesPerKm = 1 / 111.32;
+                const lngDegreesPerKm = 1 / (111.32 * Math.cos(avgLat * Math.PI / 180));
+                
+                // Use latitude degrees for speed calculation (more consistent)
+                const degreesPerSecond = (speed / 3.6) * latDegreesPerKm / 3600; // km/h to m/s to deg/s
+                const updateInterval = 200; // Update every 200ms for very smooth movement
                 
                 this.isMoving = true;
+                this.updateBusInfoLabelWithSpeed(this.currentLocationMarker.getLatLng(), speed, this.busIgnition);
                 console.log(`Starting continuous movement at ${speed} km/h`);
                 
                 this.movementInterval = setInterval(() => {
@@ -800,7 +819,7 @@
                             parseFloat(row['Longitude'])
                         ]);
                         
-                        console.log(`Using pre-computed snapped route with ${snappedCoords.length} points`);
+                        console.log(`✓ Using pre-computed snapped route with ${snappedCoords.length} points`);
                         return snappedCoords;
                     } else {
                         console.warn('No pre-computed snapped route found, using GPS coordinates');
@@ -809,6 +828,7 @@
                     
                 } catch (error) {
                     console.error('Error fetching snapped route:', error);
+                    console.log('Falling back to GPS coordinates');
                     return [];
                 }
             }
