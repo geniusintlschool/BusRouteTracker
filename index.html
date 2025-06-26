@@ -170,6 +170,10 @@
                 this.lastBusLocation = null;
                 this.lastSpeed = 0;
                 this.isInitialLoad = true;
+                this.movementInterval = null;
+                this.currentDirection = null;
+                this.isMoving = false;
+                this.stopTimer = null;
                 
                 // API Configuration
                 this.ORS_API_KEY = '5b3ce3597851110001cf62486ef5d938c6804787a401d0a56b3236ae';
@@ -472,45 +476,130 @@
                         `);
                 }
 
-                // Store current data
+                // Store current data and update movement
                 this.lastBusLocation = newLocation;
                 this.lastSpeed = speed;
+                
+                // Update bus info label with movement status
+                this.updateBusInfoLabelWithSpeed(newLocation, speed, ignition);
 
-                // Update or create bus info label
-                this.updateBusInfoLabel(newLocation);
+            }
+
+            updateBusInfoLabelWithSpeed(location, speed, ignition) {
+                const statusText = speed > 0 ? `Moving at ${speed} km/h` : 
+                                  ignition === 'ON' ? 'Stopped (10s pause)' : 'Parked';
+                
+                if (!this.busInfoLabel) {
+                    this.busInfoLabel = document.createElement('div');
+                    this.busInfoLabel.className = 'bus-info-label';
+                    document.body.appendChild(this.busInfoLabel);
+                }
+
+                this.busInfoLabel.innerHTML = `
+                    <div><strong>Bus No ${this.BUS_NUMBER}</strong></div>
+                    <div>${statusText}</div>
+                    <div>Ignition: ${ignition}</div>
+                `;
+
+                // Position label next to bus
+                const busPixelPosition = this.map.latLngToContainerPoint(location);
+                this.busInfoLabel.style.left = (busPixelPosition.x + 45) + 'px';
+                this.busInfoLabel.style.top = (busPixelPosition.y - 15) + 'px';
+                this.busInfoLabel.style.display = 'block';
             }
 
             animateBusMovement(fromLocation, toLocation, speed) {
-                const steps = 30; // Number of animation steps
-                const stepTime = 500; // Duration per step in milliseconds
-                let currentStep = 0;
-                
+                // Calculate direction for continuous movement
                 const latDiff = toLocation[0] - fromLocation[0];
                 const lngDiff = toLocation[1] - fromLocation[1];
+                const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
                 
-                const animation = setInterval(() => {
+                if (distance > 0) {
+                    this.currentDirection = {
+                        lat: latDiff / distance,
+                        lng: lngDiff / distance
+                    };
+                }
+                
+                // Start continuous movement based on speed
+                this.startContinuousMovement(speed);
+                
+                // Also do immediate smooth transition to new position
+                const steps = 20;
+                const stepTime = 1000; // 1 second transition
+                let currentStep = 0;
+                
+                const quickTransition = setInterval(() => {
                     currentStep++;
                     const progress = currentStep / steps;
-                    
-                    // Use easing function for smooth movement
                     const easedProgress = this.easeInOutQuad(progress);
                     
                     const currentLat = fromLocation[0] + (latDiff * easedProgress);
                     const currentLng = fromLocation[1] + (lngDiff * easedProgress);
                     
-                    // Update marker position
                     this.currentLocationMarker.setLatLng([currentLat, currentLng]);
-                    
-                    // Update info label position
                     this.updateBusInfoLabel([currentLat, currentLng]);
                     
                     if (currentStep >= steps) {
-                        clearInterval(animation);
-                        // Ensure final position is exact
+                        clearInterval(quickTransition);
                         this.currentLocationMarker.setLatLng(toLocation);
                         this.updateBusInfoLabel(toLocation);
+                        this.lastBusLocation = toLocation;
                     }
                 }, stepTime / steps);
+            }
+            
+            startContinuousMovement(speed) {
+                // Clear any existing movement
+                this.stopContinuousMovement();
+                
+                if (speed === 0) {
+                    // Bus is stopped - pause for 10 seconds
+                    this.isMoving = false;
+                    console.log('Bus stopped - pausing for 10 seconds');
+                    
+                    this.stopTimer = setTimeout(() => {
+                        console.log('Stop period ended');
+                        this.stopTimer = null;
+                    }, 10000);
+                    return;
+                }
+                
+                // Convert km/h to degrees per second (rough approximation)
+                // 1 km/h ≈ 0.00000277 degrees per second at equator
+                const degreesPerSecond = (speed * 0.00000277) / 3.6;
+                const updateInterval = 100; // Update every 100ms for smooth movement
+                
+                this.isMoving = true;
+                console.log(`Starting continuous movement at ${speed} km/h`);
+                
+                this.movementInterval = setInterval(() => {
+                    if (!this.currentLocationMarker || !this.currentDirection || !this.isMoving) {
+                        return;
+                    }
+                    
+                    const currentPos = this.currentLocationMarker.getLatLng();
+                    const moveDistance = degreesPerSecond * (updateInterval / 1000);
+                    
+                    const newLat = currentPos.lat + (this.currentDirection.lat * moveDistance);
+                    const newLng = currentPos.lng + (this.currentDirection.lng * moveDistance);
+                    
+                    this.currentLocationMarker.setLatLng([newLat, newLng]);
+                    this.updateBusInfoLabel([newLat, newLng]);
+                    
+                }, updateInterval);
+            }
+            
+            stopContinuousMovement() {
+                if (this.movementInterval) {
+                    clearInterval(this.movementInterval);
+                    this.movementInterval = null;
+                }
+                if (this.stopTimer) {
+                    clearTimeout(this.stopTimer);
+                    this.stopTimer = null;
+                }
+                this.isMoving = false;
             }
             
             easeInOutQuad(t) {
