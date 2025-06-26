@@ -1162,27 +1162,35 @@
                 
                 console.log(`Current position closest to order ${currentOrder}, looking for next stops in sequence`);
                 
-                // Find truly upcoming stops by considering the bus's progress
-                // Only include stops that are both ahead in order AND reasonable distance/direction
+                // For U-turn routes, track actual progress along the route
+                // Find stops that are truly ahead based on route progression
+                
+                // Get the current stop index to understand route progression
+                let progressMarker = currentOrder;
+                
+                // For U-turn routes, we need to be smarter about which stops are truly upcoming
+                // If a stop is far away but has a higher order number, it might be on the return journey
                 
                 for (let i = 0; i < this.stopMarkers.length && nextStops.length < 5; i++) {
                     const stopData = this.stopMarkers[i];
                     const distanceToStop = this.calculateDistance(busLocation, stopData.coordinates);
                     
-                    // For a stop to be upcoming, it must:
-                    // 1. Have higher order number than current position
-                    // 2. Be far enough away (not just passed)
-                    // 3. Be in a reasonable distance range
+                    // Enhanced logic for U-turn routes:
+                    // 1. Must have higher order number
+                    // 2. If distance is > 3km, it's likely on return journey - skip it
+                    // 3. Must be reasonable distance for next immediate stops
                     
                     const isAheadInOrder = stopData.order > currentOrder;
-                    const isNotJustPassed = distanceToStop > 0.2; // More than 200m away
-                    const isReasonableDistance = distanceToStop < 20; // Less than 20km away
+                    const isReasonableForNext = distanceToStop < 3.0; // Within 3km for immediate upcoming stops
+                    const isNotTooClose = distanceToStop > 0.15; // More than 150m away
                     
-                    if (isAheadInOrder && isNotJustPassed && isReasonableDistance) {
+                    if (isAheadInOrder && isReasonableForNext && isNotTooClose) {
                         nextStops.push(stopData);
                         console.log(`Added upcoming stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away`);
-                    } else if (isAheadInOrder) {
-                        console.log(`Skipped stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - too close (${distanceToStop.toFixed(2)}km), likely already passed`);
+                    } else if (isAheadInOrder && distanceToStop >= 3.0) {
+                        console.log(`Skipped distant stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, likely return journey`);
+                    } else if (isAheadInOrder && distanceToStop <= 0.15) {
+                        console.log(`Skipped close stop: ${stopData.stop['Stop Name']} (order ${stopData.order}) - ${distanceToStop.toFixed(2)}km away, already passed`);
                     }
                 }
                 

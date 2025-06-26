@@ -128,7 +128,7 @@ June 26, 2025:
 - ✓ Added continuous movement simulation between GPS updates
 - ✓ Updated to 60-second refresh intervals with continuous movement during intervals
 - ✓ ETA calculations now only occur during GPS refresh (not during movement simulation)
-- ✓ Enhanced ETA calculation to find next stops based on morning/evening order columns
+- ✓ Enhanced ETA calculation for U-turn routes - excludes distant return-journey stops
 - ✓ Added automatic 10-second stops when bus reaches any bus stop during simulation
 - ✓ Bus stop detection within 50-meter radius during continuous movement
 - ✓ Removed confusing directional arrows from route display
