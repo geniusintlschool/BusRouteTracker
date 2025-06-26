@@ -176,6 +176,7 @@ June 26, 2025:
 - ✓ Micro-movements of 41.7m over 6-second intervals with debugging logs active
 - ✓ Continuous movement system provides smooth bus icon movement on map
 - ✓ Fixed movement direction issue completely - bus now follows correct route sequence
-- ✓ Bus successfully progressed through entire route: AMMAYIKAVALA → KAPPIKUNNU 1
-- ✓ Currently at KAPPIKUNNU 1 approaching NEDIYAMCHERI with direct movement system active
-- ✓ Implemented working direct movement system with 3-second intervals toward next stops
+- ✓ Bus successfully progressed through entire route: AMMAYIKAVALA → KAPPIKUNNU 3
+- ✓ Resolved oscillating movement problem by disabling continuous movement between GPS updates
+- ✓ Clean GPS-only system: bus updates position every 60 seconds without bouncing between coordinates
+- ✓ Currently at KAPPIKUNNU 3 approaching KAPPIKUNNU 2 (0.11km away) in proper sequence
